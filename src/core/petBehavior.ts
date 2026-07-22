@@ -1,6 +1,6 @@
 // 웹페이지 위 팻의 물리·행동 상태머신 (순수 함수, DOM·크롬 API 의존 없음)
 
-export type PetMode = 'idle' | 'walking' | 'falling' | 'perched' | 'held';
+export type PetMode = 'idle' | 'walking' | 'falling' | 'perched' | 'held' | 'eating' | 'sleeping';
 
 /** px, 뷰포트 좌표 */
 export interface Vec {
@@ -53,6 +53,9 @@ export const WALK_MS = 2500;
 /** 지면에서 한 주기 중 멈춰 표정 짓는 시간 (ms). 튜닝 가능. */
 export const IDLE_MS = 1200;
 
+/** 몇 주기(cycle)마다 한 번 낮잠(sleeping) 을 자는가. 매 SLEEP_EVERY 번째 cycle 의 idle 창에서 잔다. */
+export const SLEEP_EVERY = 5;
+
 /**
  * mood 를 걷기 속도 배율(0.4~1.0)로 환산한다.
  * 배고프거나(hunger↑) 불행하면(happiness↓) 느려진다.
@@ -72,6 +75,10 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
   // held: 커서로 잡혀 있는 동안엔 물리를 멈춘다. 위치는 content 가 커서로 직접 세팅하므로
   // step 은 body 를 그대로 반환(identity)한다. falling/perch/gravity 보다 먼저 검사한다.
   if (body.mode === 'held') return body;
+
+  // eating: 먹이를 먹는 동안엔 물리를 멈춘다(held 와 동일한 no-op).
+  // mode 세팅/해제와 타이머는 content 가 관리한다. core 는 물리만 멈춘다.
+  if (body.mode === 'eating') return body;
 
   const dt = dtMs / 1000;
   const clock = body.clock + dtMs;
@@ -181,13 +188,17 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
   }
 
   // 지면 위 → 걷기/멈춤 주기.
-  const phase = clock % (WALK_MS + IDLE_MS);
+  const CYCLE = WALK_MS + IDLE_MS;
+  const cycleIndex = Math.floor(clock / CYCLE);
+  const phase = clock % CYCLE;
   if (phase >= WALK_MS) {
-    // idle 구간: 멈춰서 표정 짓는다. pos.x 유지.
+    // idle 창: 멈춰서 표정 짓는다. pos.x 유지.
+    // 매 SLEEP_EVERY 번째 cycle 의 idle 창에서는 낮잠(sleeping). 그 외엔 idle. 결정적(clock 만 사용).
+    const mode: PetMode = cycleIndex % SLEEP_EVERY === SLEEP_EVERY - 1 ? 'sleeping' : 'idle';
     return {
       pos: { x: body.pos.x, y: ground },
       vel: { x: 0, y: 0 },
-      mode: 'idle',
+      mode,
       facing: body.facing,
       clock,
     };
@@ -219,25 +230,33 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
 
 /**
  * 모드·mood 로 스프라이트 프레임 키를 반환한다. content 가 이 키로 프레임을 고른다.
- * 프레임 키 후보: 'idle' | 'walk1' | 'walk2' | 'fall' | 'happy' | 'hungry'
- * 우선순위(이동 애니메이션이 mood 표정보다 우선 → 표정은 멈췄을 때만):
+ * 프레임 키 후보: 'idle'|'walk1'|'walk2'|'fall'|'happy'|'hungry'|'want_play'|'sleep'|'eat'
+ * 우선순위(위→아래 첫 매치):
  *   1) falling → 'fall'
- *   2) walking → pos.x 를 WALK_STRIDE 로 나눈 셀 기준 walk1/walk2 번갈아(결정적)
- *   3) 멈춤(idle·perched 등): hunger 높음(>=70) → 'hungry'
- *   4) 멈춤: happiness 높음(>=90) 이고 배 안 고픔 → 'happy'
- *   5) 그 외 → 'idle'
+ *   2) held → 'idle'
+ *   3) eating → 'eat'
+ *   4) walking → pos.x 를 WALK_STRIDE 로 나눈 셀 기준 walk1/walk2 번갈아(결정적)
+ *   5) hunger>=70 → 'hungry'   (정지 상태에서 배고픔 최우선)
+ *   6) sleeping → 'sleep'
+ *   7) happiness<=30 → 'want_play'
+ *   8) happiness>=90 → 'happy'
+ *   9) 그 외 → 'idle'
+ * 즉 정지 상태에서 배고픔 > 낮잠 > 놀고싶음 > 행복 순. 걷는 중엔 mood 무관 걷기 우선.
  */
 export function spriteFrame(body: PetBody, mood: Mood): string {
   if (body.mode === 'falling') return 'fall';
   // held: 잡혀 있을 땐 걷기/표정 대신 idle 프레임. (held 전용 프레임은 아트 생기면 매핑)
   if (body.mode === 'held') return 'idle';
+  if (body.mode === 'eating') return 'eat';
   if (body.mode === 'walking') {
     // WALK_STRIDE(짧은 보폭) 단위로 프레임을 번갈아 → 이동 속도에 다리 놀림이 연동(결정적).
     const phase = Math.floor(body.pos.x / WALK_STRIDE) % 2;
     return phase === 0 ? 'walk1' : 'walk2';
   }
-  // 멈춘 상태(idle·perched)에서만 기분 표정.
+  // 정지 상태(idle·perched·sleeping)에서의 표정. 배고픔이 낮잠보다도 우선.
   if (mood.hunger >= 70) return 'hungry';
+  if (body.mode === 'sleeping') return 'sleep';
+  if (mood.happiness <= 30) return 'want_play';
   if (mood.happiness >= 90) return 'happy';
   return 'idle';
 }

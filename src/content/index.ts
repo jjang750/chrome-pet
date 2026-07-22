@@ -20,7 +20,7 @@ import type { PetBody, Env, Mood } from '../core/petBehavior';
 import { createPet } from '../core/petState';
 import { loadPet } from '../chrome/storage';
 
-// spriteFrame 이 반환하는 프레임 키 → 시트 내 인덱스 (pet.png 는 이 순서로 6프레임).
+// spriteFrame 이 반환하는 프레임 키 → 시트 내 인덱스 (pet.png 는 이 순서로 9프레임).
 const FRAME_INDEX: Record<string, number> = {
   idle: 0,
   walk1: 1,
@@ -28,7 +28,13 @@ const FRAME_INDEX: Record<string, number> = {
   fall: 3,
   happy: 4,
   hungry: 5,
+  want_play: 6,
+  sleep: 7,
+  eat: 8,
 };
+
+// 먹이 주기 감지 시 eating 애니메이션 지속 시간 (ms).
+const EAT_MS = 2000;
 
 function startPetOverlay(): void {
   const el = document.createElement('div');
@@ -49,16 +55,37 @@ function startPetOverlay(): void {
 
   // mood 는 storage 단일 진실. 초기값은 기본 팻, 로드/변경 시 갱신.
   let mood: Mood = createPet(Date.now());
+  // 직전 hunger 값. 먹이 주기(hunger 감소) 감지에 쓴다. 초기엔 현재값으로 맞춰 첫 변경 오탐 방지.
+  let prevHunger = mood.hunger;
+  // eating 종료 시각(performance.now 기준). 0 이면 먹는 중 아님.
+  let eatingUntil = 0;
+
   loadPet()
     .then((pet) => {
-      if (pet) mood = { hunger: pet.hunger, happiness: pet.happiness };
+      if (pet) {
+        mood = { hunger: pet.hunger, happiness: pet.happiness };
+        prevHunger = pet.hunger;
+      }
     })
     .catch((err) => console.error('[pet] loadPet failed', err));
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes.pet) return;
     const pet = changes.pet.newValue as { hunger: number; happiness: number } | undefined;
-    if (pet) mood = { hunger: pet.hunger, happiness: pet.happiness };
+    if (!pet) return;
+    // hunger 가 감소했으면(사이드패널 먹이 주기) 먹는 중으로 전환.
+    // 단, 잡혀있거나(held)·공중(falling)일 땐 트리거하지 않는다. 지면 상태(walking/idle/sleeping)만.
+    if (
+      pet.hunger < prevHunger &&
+      body.mode !== 'held' &&
+      body.mode !== 'falling' &&
+      !dragging
+    ) {
+      body.mode = 'eating';
+      eatingUntil = performance.now() + EAT_MS;
+    }
+    prevHunger = pet.hunger;
+    mood = { hunger: pet.hunger, happiness: pet.happiness };
   });
 
   // 초기 body: 화면 상단에서 낙하 시작.
@@ -146,6 +173,13 @@ function startPetOverlay(): void {
     const dtMs = last === 0 ? 16 : Math.min(now - last, 100);
     last = now;
 
+    // eating 만료 → 물리 재개(falling). 위치는 그대로, 속도만 0 에서 낙하 시작.
+    if (body.mode === 'eating' && now >= eatingUntil) {
+      body.mode = 'falling';
+      body.vel = { x: 0, y: 0 };
+      eatingUntil = 0;
+    }
+
     const env: Env = {
       viewport: { width: window.innerWidth, height: window.innerHeight },
       ground: window.innerHeight - SPRITE_H,
@@ -194,6 +228,8 @@ function startPetOverlay(): void {
   el.addEventListener('pointerdown', (e: PointerEvent) => {
     e.preventDefault();
     dragging = true;
+    // 잡기 우선: 먹는 중이었어도 즉시 취소하고 held 로.
+    eatingUntil = 0;
     offset = { x: e.clientX - body.pos.x, y: e.clientY - body.pos.y };
     body.mode = 'held';
     try {

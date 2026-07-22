@@ -1,5 +1,6 @@
-// 포즈별 6프레임 시트(RGB, 배경 있음)를 읽어 배경 투명화→프레임 분리→64x104 시트로 합성한다.
-// 프레임 순서: idle, walk1, walk2, fall, happy, hungry (왼→오).
+// 가로 한 줄 N프레임 시트를 읽어 배경 투명화→프레임 분리→64x104 시트로 합성한다.
+// 각 프레임은 "주 캐릭터(가장 큰 덩어리)" 기준으로 크기·정렬해, 장식(반짝이·모션선)이 있어도
+// 프레임 간 캐릭터 크기가 일정하게 유지된다. 장식은 잘리지 않는 한 함께 렌더된다.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,11 +10,20 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const FRAME_W = 64;
 const FRAME_H = 104;
-const FRAMES = ['idle', 'walk1', 'walk2', 'fall', 'happy', 'hungry'];
-const BG_MIN = 236; // 이 값 이상(모든 채널)이면 근백색 배경으로 본다
+const TARGET_W = 58; // 주 캐릭터가 셀에서 차지할 최대 폭
+const TARGET_H = 100; // 주 캐릭터가 셀에서 차지할 최대 높이
+const FRAMES = ['idle', 'walk1', 'walk2', 'fall', 'happy', 'hungry', 'want_play', 'sleep', 'eat'];
+const BG_MIN = 236;
 const ALPHA_THRESHOLD = 16;
 
-/** 테두리에서 연결된 근백색 픽셀을 flood-fill 로 투명화한다(캐릭터 내부 흰색은 보존). */
+function hasTransparentBackground(png) {
+  let transparent = 0;
+  const total = png.width * png.height;
+  for (let i = 3; i < png.data.length; i += 4) if (png.data[i] < ALPHA_THRESHOLD) transparent++;
+  return transparent / total > 0.2;
+}
+
+/** 불투명 RGB 배경일 때만: 테두리에서 연결된 근백색을 flood-fill 로 투명화. */
 function keyBackground(png) {
   const { width: w, height: h, data } = png;
   const isBg = (i) => data[i] >= BG_MIN && data[i + 1] >= BG_MIN && data[i + 2] >= BG_MIN;
@@ -30,13 +40,13 @@ function keyBackground(png) {
   for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
   while (stack.length) {
     const p = stack.pop();
-    data[p * 4 + 3] = 0; // 투명
+    data[p * 4 + 3] = 0;
     const x = p % w, y = (p / w) | 0;
     push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1);
   }
 }
 
-/** 열별 불투명 픽셀 수로 프레임 구간 [x0,x1] 들을 찾는다(프레임 사이 투명 갭 기준). */
+/** 열별 불투명 픽셀로 프레임 구간 [x0,x1] 을 찾는다. */
 function findSegments(png) {
   const { width: w, height: h, data } = png;
   const colHas = new Uint8Array(w);
@@ -52,24 +62,56 @@ function findSegments(png) {
     else if (!colHas[x] && start >= 0) { segs.push({ x0: start, x1: x - 1 }); start = -1; }
   }
   if (start >= 0) segs.push({ x0: start, x1: w - 1 });
-  return segs.filter((s) => s.x1 - s.x0 + 1 >= 20); // 너무 좁은 노이즈 구간 제거
+  return segs.filter((s) => s.x1 - s.x0 + 1 >= 20);
 }
 
-/** 주어진 x 범위 내 알파 경계 상자. */
-function alphaBBox(png, x0, x1) {
+/** 세그먼트 [x0,x1] 내 불투명 연결요소들의 경계상자를 반환(4-연결, 픽셀수 포함). */
+function components(png, x0, x1) {
+  const { width: w, height: h, data } = png;
+  const segW = x1 - x0 + 1;
+  const visited = new Uint8Array(segW * h);
+  const comps = [];
+  const stack = [];
+  for (let y = 0; y < h; y++) {
+    for (let x = x0; x <= x1; x++) {
+      const lp = (x - x0) + y * segW;
+      if (visited[lp]) continue;
+      if (data[(y * w + x) * 4 + 3] <= ALPHA_THRESHOLD) { visited[lp] = 1; continue; }
+      let minX = x, maxX = x, minY = y, maxY = y, count = 0;
+      stack.length = 0;
+      stack.push(x, y);
+      visited[lp] = 1;
+      while (stack.length) {
+        const cy = stack.pop(), cx = stack.pop();
+        count++;
+        if (cx < minX) minX = cx; if (cx > maxX) maxX = cx;
+        if (cy < minY) minY = cy; if (cy > maxY) maxY = cy;
+        const nb = [[cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]];
+        for (const [nx, ny] of nb) {
+          if (nx < x0 || nx > x1 || ny < 0 || ny >= h) continue;
+          const nlp = (nx - x0) + ny * segW;
+          if (visited[nlp]) continue;
+          visited[nlp] = 1;
+          if (data[(ny * w + nx) * 4 + 3] > ALPHA_THRESHOLD) stack.push(nx, ny);
+        }
+      }
+      comps.push({ x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1, count });
+    }
+  }
+  return comps;
+}
+
+function alphaBBoxOfSeg(png, x0, x1) {
   const { width: w, height: h, data } = png;
   let minX = x1, minY = h, maxX = x0, maxY = -1;
   for (let y = 0; y < h; y++) {
     for (let x = x0; x <= x1; x++) {
       if (data[(y * w + x) * 4 + 3] > ALPHA_THRESHOLD) {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
       }
     }
   }
-  if (maxY < 0) return { x: x0, y: 0, w: x1 - x0 + 1, h };
   return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
 }
 
@@ -89,11 +131,8 @@ function downsample(src, box, dstW, dstH) {
         for (let sx = sx0; sx < sx1; sx++) {
           const i = (sy * src.width + sx) * 4;
           const a = src.data[i + 3] / 255;
-          ar += src.data[i] * a;
-          ag += src.data[i + 1] * a;
-          ab += src.data[i + 2] * a;
-          aa += src.data[i + 3];
-          n++;
+          ar += src.data[i] * a; ag += src.data[i + 1] * a; ab += src.data[i + 2] * a;
+          aa += src.data[i + 3]; n++;
         }
       }
       const o = (dy * dstW + dx) * 4;
@@ -107,58 +146,64 @@ function downsample(src, box, dstW, dstH) {
   return out;
 }
 
-/** 이미 투명 배경인지 판정(투명 픽셀 비율이 높으면 배경 키잉을 건너뛴다). */
-function hasTransparentBackground(png) {
-  let transparent = 0;
-  const total = png.width * png.height;
-  for (let i = 3; i < png.data.length; i += 4) if (png.data[i] < ALPHA_THRESHOLD) transparent++;
-  return transparent / total > 0.2;
-}
-
 export async function makeSprite(srcPath, destPath) {
   const src = PNG.sync.read(await readFile(srcPath));
-  // 불투명 배경(RGB)일 때만 flood-fill 키잉. 이미 투명하면 알파를 그대로 신뢰(밝은 가장자리 침식 방지).
   if (!hasTransparentBackground(src)) keyBackground(src);
-  let segs = findSegments(src);
 
-  // 6개가 안 잡히면 균등 6분할로 폴백.
+  let segs = findSegments(src);
   if (segs.length !== FRAMES.length) {
     const per = src.width / FRAMES.length;
     segs = FRAMES.map((_, i) => ({ x0: Math.round(i * per), x1: Math.round((i + 1) * per) - 1 }));
   }
 
+  // 각 프레임의 주 캐릭터(최대 연결요소) 상자 + 전체 상자 산정.
+  const frames = segs.map((seg) => {
+    const comps = components(src, seg.x0, seg.x1);
+    const main = comps.reduce((a, b) => (b.count > a.count ? b : a), { count: 0, x: seg.x0, y: 0, w: 1, h: 1 });
+    const full = alphaBBoxOfSeg(src, seg.x0, seg.x1);
+    return { main, full };
+  });
+
   const sheet = new PNG({ width: FRAME_W * FRAMES.length, height: FRAME_H });
   sheet.data.fill(0);
 
   for (let f = 0; f < FRAMES.length; f++) {
-    const seg = segs[f];
-    const box = alphaBBox(src, seg.x0, seg.x1);
-    const scale = Math.min(FRAME_W / box.w, FRAME_H / box.h);
-    const dstW = Math.max(1, Math.round(box.w * scale));
-    const dstH = Math.max(1, Math.round(box.h * scale));
-    const frame = downsample(src, box, dstW, dstH);
-    const offX = f * FRAME_W + Math.floor((FRAME_W - dstW) / 2);
-    const offY = FRAME_H - dstH; // 발을 셀 바닥에
-    for (let y = 0; y < dstH; y++) {
-      for (let x = 0; x < dstW; x++) {
-        const si = (y * dstW + x) * 4;
-        const dxp = offX + x, dyp = offY + y;
-        if (dxp < 0 || dyp < 0 || dyp >= FRAME_H) continue;
+    const { main, full } = frames[f];
+    // 주 캐릭터를 셀에 담는 스케일(contain). 프레임마다 주 캐릭터 크기가 비슷하므로 일정하게 보인다.
+    const scale = Math.min(TARGET_W / main.w, TARGET_H / main.h);
+    const fw = Math.max(1, Math.round(full.w * scale));
+    const fh = Math.max(1, Math.round(full.h * scale));
+    const scaled = downsample(src, full, fw, fh);
+
+    // 주 캐릭터 중심 → 셀 가로 중앙, 주 캐릭터 발(바닥) → 셀 아래.
+    const mainCX = (main.x - full.x + main.w / 2) * scale;
+    const mainBottom = (main.y - full.y + main.h) * scale;
+    const left = Math.round(FRAME_W / 2 - mainCX);
+    const top = Math.round(FRAME_H - mainBottom);
+
+    const baseX = f * FRAME_W;
+    for (let y = 0; y < fh; y++) {
+      for (let x = 0; x < fw; x++) {
+        const dxp = baseX + left + x;
+        const dyp = top + y;
+        if (dxp < baseX || dxp >= baseX + FRAME_W || dyp < 0 || dyp >= FRAME_H) continue; // 셀 밖 클립
+        const si = (y * fw + x) * 4;
+        if (scaled[si + 3] <= 0) continue;
         const di = (dyp * sheet.width + dxp) * 4;
-        sheet.data[di] = frame[si];
-        sheet.data[di + 1] = frame[si + 1];
-        sheet.data[di + 2] = frame[si + 2];
-        sheet.data[di + 3] = frame[si + 3];
+        sheet.data[di] = scaled[si];
+        sheet.data[di + 1] = scaled[si + 1];
+        sheet.data[di + 2] = scaled[si + 2];
+        sheet.data[di + 3] = scaled[si + 3];
       }
     }
   }
 
   await mkdir(dirname(destPath), { recursive: true });
   await writeFile(destPath, PNG.sync.write(sheet));
-  return { width: sheet.width, height: sheet.height, segments: segs.length };
+  return { width: sheet.width, height: sheet.height, frames: FRAMES.length };
 }
 
-const SRC = resolve(root, 'assets/frames/sprite_images_v2.png');
+const SRC = resolve(root, 'assets/frames/sprite_images_v4.png');
 const DEST = resolve(root, 'src/assets/pet.png');
 const info = await makeSprite(SRC, DEST);
-console.log(`sprite ok → src/assets/pet.png (${info.width}x${info.height}, segments ${info.segments})`);
+console.log(`sprite ok → src/assets/pet.png (${info.width}x${info.height}, frames ${info.frames})`);

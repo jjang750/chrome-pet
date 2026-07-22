@@ -11,6 +11,7 @@ import {
   CLIMB_SPEED,
   WALK_MS,
   IDLE_MS,
+  SLEEP_EVERY,
   type PetBody,
   type Env,
   type Mood,
@@ -350,6 +351,74 @@ describe('step — held(잡힘)', () => {
   });
 });
 
+describe('step — eating(먹이)', () => {
+  it('eating 이면 body 를 그대로 반환한다(no-op, held 와 동일 패턴)', () => {
+    const env = makeEnv();
+    const body = bodyAt({ x: 200, y: 300 }, { mode: 'eating', vel: { x: 3, y: -2 }, facing: -1, clock: 700 });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos).toEqual({ x: 200, y: 300 });
+    expect(next.vel).toEqual({ x: 3, y: -2 });
+    expect(next.mode).toBe('eating');
+    expect(next.facing).toBe(-1);
+    expect(next.clock).toBe(700); // 완전 no-op
+  });
+
+  it('eating 이면 공중에 있어도 중력이 적용되지 않는다', () => {
+    const env = makeEnv();
+    const body = bodyAt({ x: 100, y: 0 }, { mode: 'eating' });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos.y).toBe(0);
+    expect(next.vel.y).toBe(0);
+    expect(next.mode).toBe('eating');
+  });
+});
+
+describe('step — sleeping(주기적 낮잠)', () => {
+  it('SLEEP_EVERY 상수가 export 된다', () => {
+    expect(SLEEP_EVERY).toBeGreaterThan(0);
+  });
+
+  const CYCLE = WALK_MS + IDLE_MS;
+
+  it('SLEEP_EVERY 번째 cycle 의 idle 창에서는 sleeping 이다', () => {
+    const env = makeEnv();
+    // cycleIndex = SLEEP_EVERY-1, phase = idle 창(WALK_MS 이후)
+    const clock = (SLEEP_EVERY - 1) * CYCLE + WALK_MS + 10;
+    const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
+    const next = step(body, env, HEALTHY, 0);
+    expect(next.mode).toBe('sleeping');
+    expect(next.vel.x).toBe(0);
+    expect(next.pos.x).toBe(100); // 위치 유지
+  });
+
+  it('sleep cycle 이 아닌 cycle 의 idle 창에서는 그냥 idle 이다', () => {
+    const env = makeEnv();
+    // cycleIndex = 0 (SLEEP_EVERY-1 아님), phase = idle 창
+    const clock = 0 * CYCLE + WALK_MS + 10;
+    const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
+    const next = step(body, env, HEALTHY, 0);
+    expect(next.mode).toBe('idle');
+  });
+
+  it('sleep cycle 이라도 walk 창(phase < WALK_MS)에서는 walking 이다', () => {
+    const env = makeEnv();
+    const clock = (SLEEP_EVERY - 1) * CYCLE + 100; // walk 창
+    const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
+    const next = step(body, env, HEALTHY, 50);
+    expect(next.mode).toBe('walking');
+  });
+
+  it('결정적: 같은 clock 이면 항상 같은 sleeping 판정', () => {
+    const env = makeEnv();
+    const clock = (2 * SLEEP_EVERY - 1) * CYCLE + WALK_MS + 5; // 다음 sleep cycle
+    const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
+    const a = step(body, env, HEALTHY, 0);
+    const b = step(body, env, HEALTHY, 0);
+    expect(a.mode).toBe('sleeping');
+    expect(a).toEqual(b);
+  });
+});
+
 describe('spriteFrame', () => {
   it('falling 이면 fall', () => {
     const body = bodyAt({ x: 0, y: 0 }, { mode: 'falling' });
@@ -413,5 +482,41 @@ describe('spriteFrame', () => {
     expect(spriteFrame(hungry, { hunger: 90, happiness: 100 })).toBe('idle');
     const happy = bodyAt({ x: 0, y: 0 }, { mode: 'held' });
     expect(spriteFrame(happy, { hunger: 0, happiness: 100 })).toBe('idle');
+  });
+
+  it('eating 이면 mood 와 무관하게 eat 프레임', () => {
+    const body = bodyAt({ x: 0, y: 0 }, { mode: 'eating' });
+    expect(spriteFrame(body, { hunger: 90, happiness: 100 })).toBe('eat');
+    expect(spriteFrame(body, { hunger: 0, happiness: 100 })).toBe('eat');
+  });
+
+  it('sleeping 이면 sleep 프레임', () => {
+    const body = bodyAt({ x: 0, y: 0 }, { mode: 'sleeping' });
+    expect(spriteFrame(body, { hunger: 0, happiness: 50 })).toBe('sleep');
+  });
+
+  it('sleeping 이라도 hunger>=70 이면 hungry 가 우선', () => {
+    const body = bodyAt({ x: 0, y: 0 }, { mode: 'sleeping' });
+    expect(spriteFrame(body, { hunger: 80, happiness: 50 })).toBe('hungry');
+  });
+
+  it('멈췄고(idle) happiness<=30 이면 want_play (happy 보다 우선, hungry 아래)', () => {
+    const body = bodyAt({ x: 0, y: 0 }, { mode: 'idle' });
+    expect(spriteFrame(body, { hunger: 0, happiness: 20 })).toBe('want_play');
+  });
+
+  it('멈췄고 hunger>=70 이면 happiness 낮아도 hungry 우선', () => {
+    const body = bodyAt({ x: 0, y: 0 }, { mode: 'idle' });
+    expect(spriteFrame(body, { hunger: 90, happiness: 10 })).toBe('hungry');
+  });
+
+  it('falling 은 eating/sleeping/mood 보다 최우선 fall', () => {
+    const body = bodyAt({ x: 0, y: 0 }, { mode: 'falling' });
+    expect(spriteFrame(body, { hunger: 90, happiness: 10 })).toBe('fall');
+  });
+
+  it('걷는 중엔 happiness 낮아도(want_play 무관) walk 프레임', () => {
+    const body = bodyAt({ x: 1, y: 0 }, { mode: 'walking' });
+    expect(['walk1', 'walk2']).toContain(spriteFrame(body, { hunger: 0, happiness: 10 }));
   });
 });
