@@ -36,6 +36,9 @@ const FRAME_INDEX: Record<string, number> = {
 // 먹이 주기 감지 시 eating 애니메이션 지속 시간 (ms).
 const EAT_MS = 2000;
 
+// perched(요소 위) 최대 체류 시간 (ms). 넘으면 타깃을 놓아 내려오게 한다.
+const PERCH_MS = 6000;
+
 function startPetOverlay(): void {
   const el = document.createElement('div');
   el.style.cssText = [
@@ -106,6 +109,10 @@ function startPetOverlay(): void {
 
   let target: Element | null = null;
   let nextRetargetAt = 0; // performance.now() 기준.
+  // 방금 perch 를 떠난 요소. 다음 재타깃에서 후보가 여럿이면 이 요소는 제외한다(다른 요소로 이동 유도).
+  let lastLeftEl: Element | null = null;
+  // perched 진입 시각(performance.now 기준). 0 이면 perched 아님. PERCH_MS 초과 시 타깃 release.
+  let perchedSince = 0;
 
   /** rect 가 perch 후보로 유효한가: 화면 안 + 크기 적당. el 이 우리 오버레이면 제외. */
   function isValidRect(node: Element, rect: DOMRect): boolean {
@@ -118,10 +125,16 @@ function startPetOverlay(): void {
     return true;
   }
 
-  /** 후보를 새로 훑어 팻 x 에 가장 가까운 유효 요소 하나를 고른다(결정적). */
+  /**
+   * 후보를 새로 훑어 팻 x 에 가장 가까운 유효 요소 하나를 고른다(결정적).
+   * 방금 떠난 요소(lastLeftEl)는 다른 유효 후보가 있으면 제외한다(오브젝트→다른 오브젝트 이동).
+   * 후보가 lastLeftEl 하나뿐이면 그대로 허용한다.
+   */
   function pickTarget(): Element | null {
     let best: Element | null = null;
     let bestDist = Infinity;
+    let fallback: Element | null = null; // lastLeftEl 만 남았을 때의 예비.
+    let fallbackDist = Infinity;
     const petCx = body.pos.x + SPRITE_W / 2;
     const nodes = document.querySelectorAll(TARGET_SELECTOR);
     for (const node of nodes) {
@@ -129,12 +142,21 @@ function startPetOverlay(): void {
       if (!isValidRect(node, rect)) continue;
       const cx = (rect.left + rect.right) / 2;
       const dist = Math.abs(cx - petCx);
+      if (node === lastLeftEl) {
+        // 방금 떠난 요소는 예비로만 기록.
+        if (dist < fallbackDist) {
+          fallbackDist = dist;
+          fallback = node;
+        }
+        continue;
+      }
       if (dist < bestDist) {
         bestDist = dist;
         best = node;
       }
     }
-    return best;
+    // 다른 후보가 없으면 방금 떠난 요소라도 허용.
+    return best ?? fallback;
   }
 
   /** 매 프레임 호출. 현재 타깃 rect 로 perch 를 계산하거나 null 을 반환한다. */
@@ -178,6 +200,22 @@ function startPetOverlay(): void {
       body.mode = 'falling';
       body.vel = { x: 0, y: 0 };
       eatingUntil = 0;
+    }
+
+    // perched 체류 타이머: 요소 위에 PERCH_MS 이상 있으면 타깃을 놓아 내려오게 한다.
+    // held/eating/falling 등에는 간섭하지 않도록 mode==='perched' 일 때만 동작.
+    if (body.mode === 'perched') {
+      if (perchedSince === 0) {
+        perchedSince = now; // perched 진입 시점 기록.
+      } else if (now - perchedSince >= PERCH_MS && target) {
+        // 체류 한도 초과 → 현재 요소를 놓는다. computePerch 가 null 을 반환해 core 가 내려오게 함.
+        lastLeftEl = target; // 다음 재타깃에서 제외하기 위해 기억.
+        target = null;
+        perchedSince = 0;
+        nextRetargetAt = now + RETARGET_INTERVAL; // 내려와 잠깐 배회 후 다음 요소로.
+      }
+    } else {
+      perchedSince = 0; // perched 가 아니면 타이머 리셋(다음 perch 를 새로 계측).
     }
 
     const env: Env = {
