@@ -426,13 +426,28 @@ describe('spriteFrame', () => {
   });
 
   it('걷는 중엔 배고파도 walk 프레임(이동 애니메이션 최우선)', () => {
-    const body = bodyAt({ x: 1, y: 0 }, { mode: 'walking' });
+    const body = bodyAt({ x: 1, y: 0 }, { mode: 'walking', vel: { x: 60, y: 0 } });
     expect(['walk1', 'walk2']).toContain(spriteFrame(body, { hunger: 90, happiness: 100 }));
   });
 
   it('걷는 중엔 happiness 100이어도 walk 프레임', () => {
-    const body = bodyAt({ x: 1, y: 0 }, { mode: 'walking' });
+    const body = bodyAt({ x: 1, y: 0 }, { mode: 'walking', vel: { x: 60, y: 0 } });
     expect(['walk1', 'walk2']).toContain(spriteFrame(body, HEALTHY));
+  });
+
+  it('perched 라도 좌우로 움직이면(vel.x≠0) walk 프레임', () => {
+    const body = bodyAt({ x: 1, y: 0 }, { mode: 'perched', vel: { x: 60, y: 0 } });
+    expect(['walk1', 'walk2']).toContain(spriteFrame(body, HEALTHY));
+  });
+
+  it('perched 라도 좌로 움직이면(vel.x<0) walk 프레임', () => {
+    const body = bodyAt({ x: 1, y: 0 }, { mode: 'perched', vel: { x: -60, y: 0 } });
+    expect(['walk1', 'walk2']).toContain(spriteFrame(body, { hunger: 90, happiness: 100 }));
+  });
+
+  it('walking mode 라도 vel.x===0 이면 표정 프레임(idle 등)', () => {
+    const body = bodyAt({ x: 0, y: 0 }, { mode: 'walking', vel: { x: 0, y: 0 } });
+    expect(spriteFrame(body, { hunger: 0, happiness: 50 })).toBe('idle');
   });
 
   it('멈췄을(idle) 때 배고프면 hungry', () => {
@@ -453,8 +468,8 @@ describe('spriteFrame', () => {
   it('걷기는 pos.x 기반으로 walk1/walk2 를 번갈아 낸다(WALK_STRIDE 기준, 결정적)', () => {
     const moodMid: Mood = { hunger: 40, happiness: 60 };
     // WALK_STRIDE 단위로 번갈아: 인접 stride 셀은 서로 다른 프레임.
-    const even = bodyAt({ x: 0 * WALK_STRIDE + 1, y: 0 }, { mode: 'walking' });
-    const odd = bodyAt({ x: 1 * WALK_STRIDE + 1, y: 0 }, { mode: 'walking' });
+    const even = bodyAt({ x: 0 * WALK_STRIDE + 1, y: 0 }, { mode: 'walking', vel: { x: 60, y: 0 } });
+    const odd = bodyAt({ x: 1 * WALK_STRIDE + 1, y: 0 }, { mode: 'walking', vel: { x: 60, y: 0 } });
     const f1 = spriteFrame(even, moodMid);
     const f2 = spriteFrame(odd, moodMid);
     expect([f1, f2].sort()).toEqual(['walk1', 'walk2']);
@@ -462,16 +477,28 @@ describe('spriteFrame', () => {
 
   it('인접한 두 stride 셀은 서로 다른 walk 프레임을 낸다', () => {
     const moodMid: Mood = { hunger: 40, happiness: 60 };
-    const a = spriteFrame(bodyAt({ x: 3 * WALK_STRIDE + 2, y: 0 }, { mode: 'walking' }), moodMid);
-    const b = spriteFrame(bodyAt({ x: 4 * WALK_STRIDE + 2, y: 0 }, { mode: 'walking' }), moodMid);
+    const a = spriteFrame(
+      bodyAt({ x: 3 * WALK_STRIDE + 2, y: 0 }, { mode: 'walking', vel: { x: 60, y: 0 } }),
+      moodMid,
+    );
+    const b = spriteFrame(
+      bodyAt({ x: 4 * WALK_STRIDE + 2, y: 0 }, { mode: 'walking', vel: { x: 60, y: 0 } }),
+      moodMid,
+    );
     expect(a).not.toBe(b);
   });
 
   it('같은 stride 셀 안에서는 동일한 walk 프레임을 낸다', () => {
     const moodMid: Mood = { hunger: 40, happiness: 60 };
-    const lo = spriteFrame(bodyAt({ x: 2 * WALK_STRIDE + 0, y: 0 }, { mode: 'walking' }), moodMid);
+    const lo = spriteFrame(
+      bodyAt({ x: 2 * WALK_STRIDE + 0, y: 0 }, { mode: 'walking', vel: { x: 60, y: 0 } }),
+      moodMid,
+    );
     const hi = spriteFrame(
-      bodyAt({ x: 2 * WALK_STRIDE + (WALK_STRIDE - 1), y: 0 }, { mode: 'walking' }),
+      bodyAt(
+        { x: 2 * WALK_STRIDE + (WALK_STRIDE - 1), y: 0 },
+        { mode: 'walking', vel: { x: 60, y: 0 } },
+      ),
       moodMid,
     );
     expect(lo).toBe(hi);
@@ -516,7 +543,7 @@ describe('spriteFrame', () => {
   });
 
   it('걷는 중엔 happiness 낮아도(want_play 무관) walk 프레임', () => {
-    const body = bodyAt({ x: 1, y: 0 }, { mode: 'walking' });
+    const body = bodyAt({ x: 1, y: 0 }, { mode: 'walking', vel: { x: 60, y: 0 } });
     expect(['walk1', 'walk2']).toContain(spriteFrame(body, { hunger: 0, happiness: 10 }));
   });
 });

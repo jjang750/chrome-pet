@@ -235,25 +235,28 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
  *   1) falling → 'fall'
  *   2) held → 'idle'
  *   3) eating → 'eat'
- *   4) walking → pos.x 를 WALK_STRIDE 로 나눈 셀 기준 walk1/walk2 번갈아(결정적)
+ *   4) vel.x !== 0 (좌우 이동 중) → pos.x 를 WALK_STRIDE 로 나눈 셀 기준 walk1/walk2 번갈아(결정적)
  *   5) hunger>=70 → 'hungry'   (정지 상태에서 배고픔 최우선)
  *   6) sleeping → 'sleep'
  *   7) happiness<=30 → 'want_play'
  *   8) happiness>=90 → 'happy'
  *   9) 그 외 → 'idle'
- * 즉 정지 상태에서 배고픔 > 낮잠 > 놀고싶음 > 행복 순. 걷는 중엔 mood 무관 걷기 우선.
+ * 즉 걷기 판정은 mode 가 아니라 vel.x 로 한다. perched 순찰처럼 mode 가 walking 이 아니어도
+ * 좌우로 움직이면(vel.x≠0) walk 프레임을 낸다("움직이는데 idle 표정" 버그 방지).
+ * 정지(vel.x===0) 상태에서는 배고픔 > 낮잠 > 놀고싶음 > 행복 순으로 표정을 낸다.
  */
 export function spriteFrame(body: PetBody, mood: Mood): string {
   if (body.mode === 'falling') return 'fall';
   // held: 잡혀 있을 땐 걷기/표정 대신 idle 프레임. (held 전용 프레임은 아트 생기면 매핑)
   if (body.mode === 'held') return 'idle';
   if (body.mode === 'eating') return 'eat';
-  if (body.mode === 'walking') {
+  if (body.vel.x !== 0) {
+    // 좌우로 움직이는 중이면 mode 와 무관하게 걷기 프레임(perched 순찰 포함).
     // WALK_STRIDE(짧은 보폭) 단위로 프레임을 번갈아 → 이동 속도에 다리 놀림이 연동(결정적).
     const phase = Math.floor(body.pos.x / WALK_STRIDE) % 2;
     return phase === 0 ? 'walk1' : 'walk2';
   }
-  // 정지 상태(idle·perched·sleeping)에서의 표정. 배고픔이 낮잠보다도 우선.
+  // 정지 상태(vel.x===0: idle·perched·sleeping 등)에서의 표정. 배고픔이 낮잠보다도 우선.
   if (mood.hunger >= 70) return 'hungry';
   if (body.mode === 'sleeping') return 'sleep';
   if (mood.happiness <= 30) return 'want_play';
