@@ -22,8 +22,19 @@ function ensurePetTickAlarm(): void {
   chrome.alarms.create('pet-tick', { periodInMinutes: 1 });
 }
 
+// 툴바 아이콘(action) 클릭 시 사이드패널이 열리도록 설정한다. 같은 값 재설정이라 멱등하다.
+function ensurePanelOpensOnActionClick(): void {
+  chrome.sidePanel
+    .setPanelBehavior({ openPanelOnActionClick: true })
+    .catch((e) => recordError(`setPanelBehavior: ${String(e)}`));
+}
+
+// SW 로드 시점에도 한 번 배선한다. onInstalled 가 없는 재기동(브라우저 재시작 등)에서도 보장.
+ensurePanelOpensOnActionClick();
+
 chrome.runtime.onInstalled.addListener(() => {
   ensurePetTickAlarm();
+  ensurePanelOpensOnActionClick();
   void (async () => {
     const existing = await loadPet();
     if (!existing) await savePet(createPet(Date.now()));
