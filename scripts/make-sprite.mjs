@@ -174,17 +174,21 @@ export async function makeSprite(srcPath, destPath) {
 
   for (let f = 0; f < FRAMES.length; f++) {
     const { main, full } = frames[f];
-    // 주 캐릭터를 셀에 담는 스케일(contain). 프레임마다 주 캐릭터 크기가 비슷하므로 일정하게 보인다.
-    const scale = Math.min(TARGET_W / main.w, TARGET_H / main.h);
+    // 주 캐릭터 기준으로 크기를 맞추되(프레임 간 캐릭터 크기 일정),
+    // 장식 포함 전체(full)가 셀을 넘지 않도록 상한을 둔다 → 옆/위 잘림 방지.
+    const scale = Math.min(
+      TARGET_W / main.w,
+      TARGET_H / main.h,
+      (FRAME_W - 2) / full.w,
+      (FRAME_H - 2) / full.h,
+    );
     const fw = Math.max(1, Math.round(full.w * scale));
     const fh = Math.max(1, Math.round(full.h * scale));
     const scaled = downsample(src, full, fw, fh);
 
-    // 주 캐릭터 중심 → 셀 가로 중앙, 주 캐릭터 발(바닥) → 셀 아래.
-    const mainCX = (main.x - full.x + main.w / 2) * scale;
-    const mainBottom = (main.y - full.y + main.h) * scale;
-    const left = Math.round(FRAME_W / 2 - mainCX);
-    const top = Math.round(FRAME_H - mainBottom);
+    // 전체 내용 기준 가로 중앙 + 바닥 정렬(장식이 한쪽에 몰려도 셀 안에 들어온다).
+    const left = Math.round((FRAME_W - fw) / 2);
+    const top = FRAME_H - fh;
 
     const baseX = f * FRAME_W;
     for (let y = 0; y < fh; y++) {
