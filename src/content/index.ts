@@ -39,6 +39,12 @@ const EAT_MS = 2000;
 // perched(요소 위) 최대 체류 시간 (ms). 넘으면 타깃을 놓아 내려오게 한다.
 const PERCH_MS = 6000;
 
+// 마우스가 이 시간 이상 안 움직이면 팻이 커서로 올라가 논다(playing).
+const IDLE_MOUSE_MS = 30000;
+
+// playing 중 커서를 향한 이동 보간 계수(프레임당). 클수록 빨리 붙는다.
+const PLAY_LERP = 0.15;
+
 function startPetOverlay(): void {
   const el = document.createElement('div');
   el.style.cssText = [
@@ -90,6 +96,12 @@ function startPetOverlay(): void {
     prevHunger = pet.hunger;
     mood = { hunger: pet.hunger, happiness: pet.happiness };
   });
+
+  // ── 마우스 추적(playing 트리거) ─────────────────────────────────────
+  // 마지막 mousemove 시각(performance.now 기준)·커서 좌표. 30초 정지 감지에 쓴다.
+  let lastMouseMoveAt = performance.now();
+  let cursor = { x: 0, y: 0 };
+  let haveCursor = false; // 최소 1회 mousemove 전엔 커서 위치를 모른다.
 
   // 초기 body: 화면 상단에서 낙하 시작.
   let body: PetBody = {
@@ -202,6 +214,21 @@ function startPetOverlay(): void {
       eatingUntil = 0;
     }
 
+    // 마우스가 IDLE_MOUSE_MS 이상 정지 → playing 진입.
+    // 드래그·held·eating·falling(공중) 중에는 진입하지 않는다. 커서 위치를 알아야 이동 가능.
+    if (
+      haveCursor &&
+      !dragging &&
+      body.mode !== 'held' &&
+      body.mode !== 'eating' &&
+      body.mode !== 'playing' &&
+      body.mode !== 'falling' &&
+      now - lastMouseMoveAt >= IDLE_MOUSE_MS
+    ) {
+      body.mode = 'playing';
+      body.vel = { x: 0, y: 0 };
+    }
+
     // perched 체류 타이머: 요소 위에 PERCH_MS 이상 있으면 타깃을 놓아 내려오게 한다.
     // held/eating/falling 등에는 간섭하지 않도록 mode==='perched' 일 때만 동작.
     if (body.mode === 'perched') {
@@ -223,6 +250,17 @@ function startPetOverlay(): void {
       ground: window.innerHeight - SPRITE_H,
       perch: computePerch(now),
     };
+
+    // playing: 커서 위치로 부드럽게 이동. step 은 playing 에서 no-op 이라 이 pos 가 유지된다.
+    if (body.mode === 'playing' && haveCursor) {
+      const tx = clamp(cursor.x - SPRITE_W / 2, 0, window.innerWidth - SPRITE_W);
+      const ty = clamp(cursor.y - SPRITE_H / 2, 0, window.innerHeight - SPRITE_H);
+      body.pos = {
+        x: body.pos.x + (tx - body.pos.x) * PLAY_LERP,
+        y: body.pos.y + (ty - body.pos.y) * PLAY_LERP,
+      };
+      body.facing = tx >= body.pos.x ? 1 : -1; // 목표 방향으로 바라보기.
+    }
 
     try {
       body = step(body, env, mood, dtMs);
@@ -252,6 +290,18 @@ function startPetOverlay(): void {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stop();
     else start();
+  });
+
+  // ── 마우스 추적 리스너 ──────────────────────────────────────────────
+  // 커서 위치·마지막 이동 시각 갱신. playing 중이었으면 해제해 떨어뜨린다.
+  window.addEventListener('mousemove', (e: MouseEvent) => {
+    lastMouseMoveAt = performance.now();
+    cursor = { x: e.clientX, y: e.clientY };
+    haveCursor = true;
+    if (body.mode === 'playing') {
+      body.mode = 'falling'; // 다음 step 에서 중력으로 지면 복귀.
+      body.vel = { x: 0, y: 0 };
+    }
   });
 
   // ── 포인터 드래그(집기/이동/놓기) ──────────────────────────────────────

@@ -1,6 +1,6 @@
 // 웹페이지 위 팻의 물리·행동 상태머신 (순수 함수, DOM·크롬 API 의존 없음)
 
-export type PetMode = 'idle' | 'walking' | 'falling' | 'perched' | 'held' | 'eating' | 'sleeping';
+export type PetMode = 'idle' | 'walking' | 'falling' | 'perched' | 'held' | 'eating' | 'sleeping' | 'playing';
 
 /** px, 뷰포트 좌표 */
 export interface Vec {
@@ -79,6 +79,11 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
   // eating: 먹이를 먹는 동안엔 물리를 멈춘다(held 와 동일한 no-op).
   // mode 세팅/해제와 타이머는 content 가 관리한다. core 는 물리만 멈춘다.
   if (body.mode === 'eating') return body;
+
+  // playing: 마우스가 오래 멈추면 팻이 커서 위로 올라가 논다. content 가 매 프레임 body.pos 를
+  // 커서 기준으로 세팅하므로 step 은 물리를 멈추고 body 를 그대로 반환(identity)한다.
+  // held/eating 과 동일한 no-op. mode 세팅(마우스 정지)/해제(마우스 이동)는 content 가 관리한다.
+  if (body.mode === 'playing') return body;
 
   const dt = dtMs / 1000;
   const clock = body.clock + dtMs;
@@ -249,12 +254,13 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
  *   1) falling → 'fall'
  *   2) held → 'idle'
  *   3) eating → 'eat'
- *   4) vel.x !== 0 (좌우 이동 중) → pos.x 를 WALK_STRIDE 로 나눈 셀 기준 walk1/walk2 번갈아(결정적)
- *   5) hunger>=70 → 'hungry'   (정지 상태에서 배고픔 최우선)
- *   6) sleeping → 'sleep'
- *   7) happiness<=30 → 'want_play'
- *   8) happiness>=90 → 'happy'
- *   9) 그 외 → 'idle'
+ *   4) playing → 'happy'   (커서와 노는 중: 걷기 판정보다 앞서 노는 표정)
+ *   5) vel.x !== 0 (좌우 이동 중) → pos.x 를 WALK_STRIDE 로 나눈 셀 기준 walk1/walk2 번갈아(결정적)
+ *   6) hunger>=70 → 'hungry'   (정지 상태에서 배고픔 최우선)
+ *   7) sleeping → 'sleep'
+ *   8) happiness<=30 → 'want_play'
+ *   9) happiness>=90 → 'happy'
+ *   10) 그 외 → 'idle'
  * 즉 걷기 판정은 mode 가 아니라 vel.x 로 한다. perched 순찰처럼 mode 가 walking 이 아니어도
  * 좌우로 움직이면(vel.x≠0) walk 프레임을 낸다("움직이는데 idle 표정" 버그 방지).
  * 정지(vel.x===0) 상태에서는 배고픔 > 낮잠 > 놀고싶음 > 행복 순으로 표정을 낸다.
@@ -264,6 +270,9 @@ export function spriteFrame(body: PetBody, mood: Mood): string {
   // held: 잡혀 있을 땐 걷기/표정 대신 idle 프레임. (held 전용 프레임은 아트 생기면 매핑)
   if (body.mode === 'held') return 'idle';
   if (body.mode === 'eating') return 'eat';
+  // playing: 커서와 노는 중엔 걷기 판정보다 앞서 happy(노는 표정)를 낸다.
+  // content 가 커서로 몰며 vel.x 를 세팅해도 걷기 프레임 대신 happy 가 나오도록 vel.x 검사보다 위에 둔다.
+  if (body.mode === 'playing') return 'happy';
   if (body.vel.x !== 0) {
     // 좌우로 움직이는 중이면 mode 와 무관하게 걷기 프레임(perched 순찰 포함).
     // WALK_STRIDE(짧은 보폭) 단위로 프레임을 번갈아 → 이동 속도에 다리 놀림이 연동(결정적).

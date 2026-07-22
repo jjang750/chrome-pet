@@ -441,6 +441,46 @@ describe('step — eating(먹이)', () => {
   });
 });
 
+describe('step — playing(마우스와 놀기)', () => {
+  it('playing 이면 body 를 그대로 반환한다(no-op, held/eating 과 동일 패턴)', () => {
+    const env = makeEnv();
+    const body = bodyAt({ x: 321, y: 54 }, { mode: 'playing', vel: { x: 9, y: -7 }, facing: -1, clock: 800 });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos).toEqual({ x: 321, y: 54 });
+    expect(next.vel).toEqual({ x: 9, y: -7 });
+    expect(next.mode).toBe('playing');
+    expect(next.facing).toBe(-1);
+    expect(next.clock).toBe(800); // 완전 no-op, clock 미누적
+  });
+
+  it('playing 이면 공중에 있어도 중력이 적용되지 않는다', () => {
+    const env = makeEnv();
+    const body = bodyAt({ x: 100, y: 0 }, { mode: 'playing' });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos.y).toBe(0);
+    expect(next.vel.y).toBe(0);
+    expect(next.mode).toBe('playing');
+  });
+
+  it('playing 은 perch 가 있어도 관여하지 않는다', () => {
+    const perch = { top: 300, left: 200, right: 400 };
+    const env: Env = { viewport: { width: 800, height: 600 }, ground: 600 - SPRITE_H, perch };
+    const body = bodyAt({ x: 250, y: 100 }, { mode: 'playing' });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.mode).toBe('playing');
+    expect(next.pos).toEqual({ x: 250, y: 100 });
+  });
+
+  it('playing 은 vel.x 가 있어도 content 가 세팅한 pos 를 유지한다(no-op)', () => {
+    // content 가 커서로 몰며 vel.x 를 세팅해도 step 은 pos 를 건드리지 않는다.
+    const env = makeEnv();
+    const body = bodyAt({ x: 250, y: env.ground }, { mode: 'playing', vel: { x: 60, y: 0 } });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos.x).toBe(250);
+    expect(next.mode).toBe('playing');
+  });
+});
+
 describe('step — sleeping(주기적 낮잠)', () => {
   it('SLEEP_EVERY 상수가 export 된다', () => {
     expect(SLEEP_EVERY).toBeGreaterThan(0);
@@ -583,6 +623,22 @@ describe('spriteFrame', () => {
     const body = bodyAt({ x: 0, y: 0 }, { mode: 'eating' });
     expect(spriteFrame(body, { hunger: 90, happiness: 100 })).toBe('eat');
     expect(spriteFrame(body, { hunger: 0, happiness: 100 })).toBe('eat');
+  });
+
+  it('playing 이면 happy 프레임(vel.x 가 있어도 걷기 아닌 happy)', () => {
+    // content 가 커서로 몰며 vel.x 를 세팅해도 걷기 대신 happy(노는 표정).
+    const body = bodyAt({ x: 1, y: 0 }, { mode: 'playing', vel: { x: 60, y: 0 } });
+    expect(spriteFrame(body, HEALTHY)).toBe('happy');
+  });
+
+  it('playing 이면 mood 와 무관하게 happy(배고파도 happy)', () => {
+    const body = bodyAt({ x: 1, y: 0 }, { mode: 'playing', vel: { x: 60, y: 0 } });
+    expect(spriteFrame(body, { hunger: 90, happiness: 10 })).toBe('happy');
+  });
+
+  it('playing 은 falling/held/eating 보다는 아래 우선순위(playing 단독이면 happy)', () => {
+    const body = bodyAt({ x: 0, y: 0 }, { mode: 'playing', vel: { x: 0, y: 0 } });
+    expect(spriteFrame(body, { hunger: 0, happiness: 50 })).toBe('happy');
   });
 
   it('sleeping 이면 sleep 프레임', () => {
