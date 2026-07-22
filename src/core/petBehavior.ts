@@ -39,7 +39,7 @@ export const SPRITE_H = 104;
 export const G = 2000;
 
 /** 건강한 팻의 기본 걷기 속도 (px/s). */
-export const WALK_SPEED = 60;
+export const WALK_SPEED = 32;
 
 /** 걷기 프레임 교대 보폭 (px). 이 거리마다 walk1↔walk2 교대 → 짧아서 다리 놀림이 빨라 보인다. */
 export const WALK_STRIDE = 14;
