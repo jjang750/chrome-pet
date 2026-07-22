@@ -35,8 +35,8 @@ export interface Mood {
 export const SPRITE_W = 64;
 export const SPRITE_H = 104;
 
-/** 중력 가속도 (px/s^2). */
-export const G = 2000;
+/** 중력 가속도 (px/s^2). 너무 크면 낙하가 "쿵" 하고 순간이동처럼 보인다 → 부드럽게 낮춤. */
+export const G = 700;
 
 /** 건강한 팻의 기본 걷기 속도 (px/s). */
 export const WALK_SPEED = 32;
@@ -47,11 +47,11 @@ export const WALK_STRIDE = 14;
 /** perch(요소) 위로 올라갈 때의 상승 속도 (px/s). */
 export const CLIMB_SPEED = 120;
 
-/** 지면에서 한 주기 중 걷는 시간 (ms). 튜닝 가능. */
-export const WALK_MS = 2500;
+/** 지면에서 한 주기 중 걷는 시간 (ms). 길게 두어 이동이 자주 끊기지 않게. */
+export const WALK_MS = 5000;
 
-/** 지면에서 한 주기 중 멈춰 표정 짓는 시간 (ms). 튜닝 가능. */
-export const IDLE_MS = 1200;
+/** 지면에서 한 주기 중 멈춰 표정 짓는 시간 (ms). 짧게 두어 멈춤이 덜 거슬리게. */
+export const IDLE_MS = 900;
 
 /** 몇 주기(cycle)마다 한 번 낮잠(sleeping) 을 자는가. 매 SLEEP_EVERY 번째 cycle 의 idle 창에서 잔다. */
 export const SLEEP_EVERY = 5;
