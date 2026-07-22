@@ -55,7 +55,9 @@ test('오버레이 div 가 붙고 바닥으로 낙하 수렴하며 hungry 프레
 
     await page.goto('data:text/html,<html><body><h1>overlay test</h1></body></html>');
 
-    // ── ① 오버레이 div 존재 + pointer-events:none + SPRITE_W x SPRITE_H ───────────
+    // ── ① 오버레이 div 존재 + pointer-events:auto + SPRITE_W x SPRITE_H ───────────
+    // 드래그 이동을 받으려면 오버레이가 포인터 이벤트를 받아야 한다(none→auto). 팻 영역(64×104)
+    // 에서만 클릭을 가져가는 의도된 트레이드오프. drag.spec 가 실제 드래그 동작을 검증한다.
     const overlay = page.locator(OVERLAY_SELECTOR);
     await expect(overlay).toHaveCount(1, { timeout: 5000 });
 
@@ -69,7 +71,7 @@ test('오버레이 div 가 붙고 바닥으로 낙하 수렴하며 hungry 프레
         zIndex: cs.zIndex,
       };
     });
-    expect(box.pointerEvents).toBe('none');
+    expect(box.pointerEvents).toBe('auto');
     expect(box.position).toBe('fixed');
     expect(box.width).toBe(SPRITE_W);
     expect(box.height).toBe(SPRITE_H);

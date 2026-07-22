@@ -39,7 +39,8 @@ function startPetOverlay(): void {
     `width:${SPRITE_W}px`,
     `height:${SPRITE_H}px`,
     'z-index:2147483647', // 최대 z-index
-    'pointer-events:none', // 클릭 절대 비차단
+    'pointer-events:auto', // 드래그 수신용. 팻 영역(64×104px)에서만 클릭을 가져간다(의도된 트레이드오프).
+    'cursor:grab', // 잡을 수 있음을 표시. 잡는 중엔 grabbing 으로 전환.
     'image-rendering:pixelated',
     'background-repeat:no-repeat',
     `background-image:url(${chrome.runtime.getURL('pet.png')})`,
@@ -180,6 +181,53 @@ function startPetOverlay(): void {
     if (document.hidden) stop();
     else start();
   });
+
+  // ── 포인터 드래그(집기/이동/놓기) ──────────────────────────────────────
+  // held 동안 step 은 identity → pointermove 가 세팅한 pos 가 그대로 유지된다.
+  // body 는 rAF 와 공유하는 클로저 참조. 놓으면 falling 으로 물리 재개.
+  const clamp = (v: number, lo: number, hi: number): number =>
+    v < lo ? lo : v > hi ? hi : v;
+
+  let dragging = false;
+  let offset = { x: 0, y: 0 }; // 커서와 팻 좌상단의 차. 잡은 지점 유지용.
+
+  el.addEventListener('pointerdown', (e: PointerEvent) => {
+    e.preventDefault();
+    dragging = true;
+    offset = { x: e.clientX - body.pos.x, y: e.clientY - body.pos.y };
+    body.mode = 'held';
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch (err) {
+      console.warn('[pet] setPointerCapture failed', err);
+    }
+    el.style.cursor = 'grabbing';
+  });
+
+  el.addEventListener('pointermove', (e: PointerEvent) => {
+    if (!dragging) return;
+    body.pos = {
+      x: clamp(e.clientX - offset.x, 0, window.innerWidth - SPRITE_W),
+      y: clamp(e.clientY - offset.y, 0, window.innerHeight - SPRITE_H),
+    };
+    body.mode = 'held'; // held 유지(rAF 의 step 이 identity 라 pos 보존).
+  });
+
+  function endDrag(e: PointerEvent): void {
+    if (!dragging) return;
+    dragging = false;
+    body.mode = 'falling';
+    body.vel = { x: 0, y: 0 };
+    try {
+      el.releasePointerCapture(e.pointerId);
+    } catch {
+      // 이미 해제됐거나 캡처가 없으면 무시.
+    }
+    el.style.cursor = 'grab';
+  }
+
+  el.addEventListener('pointerup', endDrag);
+  el.addEventListener('pointercancel', endDrag);
 
   start();
 }

@@ -1,6 +1,6 @@
 // 웹페이지 위 팻의 물리·행동 상태머신 (순수 함수, DOM·크롬 API 의존 없음)
 
-export type PetMode = 'idle' | 'walking' | 'falling' | 'perched';
+export type PetMode = 'idle' | 'walking' | 'falling' | 'perched' | 'held';
 
 /** px, 뷰포트 좌표 */
 export interface Vec {
@@ -69,6 +69,10 @@ function speedFactor(mood: Mood): number {
  * perch 는 이번 루프에서 무시한다(루프 B).
  */
 export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody {
+  // held: 커서로 잡혀 있는 동안엔 물리를 멈춘다. 위치는 content 가 커서로 직접 세팅하므로
+  // step 은 body 를 그대로 반환(identity)한다. falling/perch/gravity 보다 먼저 검사한다.
+  if (body.mode === 'held') return body;
+
   const dt = dtMs / 1000;
   const clock = body.clock + dtMs;
   const { ground, viewport, perch } = env;
@@ -225,6 +229,8 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
  */
 export function spriteFrame(body: PetBody, mood: Mood): string {
   if (body.mode === 'falling') return 'fall';
+  // held: 잡혀 있을 땐 걷기/표정 대신 idle 프레임. (held 전용 프레임은 아트 생기면 매핑)
+  if (body.mode === 'held') return 'idle';
   if (body.mode === 'walking') {
     // WALK_STRIDE(짧은 보폭) 단위로 프레임을 번갈아 → 이동 속도에 다리 놀림이 연동(결정적).
     const phase = Math.floor(body.pos.x / WALK_STRIDE) % 2;

@@ -319,6 +319,37 @@ describe('step — perch(요소 안착)', () => {
   });
 });
 
+describe('step — held(잡힘)', () => {
+  it('held 면 body 를 그대로 반환한다(pos/vel/mode/facing/clock identity)', () => {
+    const env = makeEnv();
+    const body = bodyAt({ x: 123, y: 45 }, { mode: 'held', vel: { x: 7, y: -9 }, facing: -1, clock: 500 });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos).toEqual({ x: 123, y: 45 });
+    expect(next.vel).toEqual({ x: 7, y: -9 });
+    expect(next.mode).toBe('held');
+    expect(next.facing).toBe(-1);
+    expect(next.clock).toBe(500); // held 는 clock 도 누적하지 않음(완전 no-op)
+  });
+
+  it('held 면 공중에 있어도 중력이 적용되지 않는다', () => {
+    const env = makeEnv();
+    const body = bodyAt({ x: 100, y: 0 }, { mode: 'held' }); // 공중
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos.y).toBe(0); // 안 떨어짐
+    expect(next.vel.y).toBe(0);
+    expect(next.mode).toBe('held');
+  });
+
+  it('held 는 perch 가 있어도 관여하지 않는다', () => {
+    const perch = { top: 300, left: 200, right: 400 };
+    const env: Env = { viewport: { width: 800, height: 600 }, ground: 600 - SPRITE_H, perch };
+    const body = bodyAt({ x: 250, y: 100 }, { mode: 'held' });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.mode).toBe('held');
+    expect(next.pos).toEqual({ x: 250, y: 100 });
+  });
+});
+
 describe('spriteFrame', () => {
   it('falling 이면 fall', () => {
     const body = bodyAt({ x: 0, y: 0 }, { mode: 'falling' });
@@ -375,5 +406,12 @@ describe('spriteFrame', () => {
       moodMid,
     );
     expect(lo).toBe(hi);
+  });
+
+  it('held 면 mood 와 무관하게 idle 프레임', () => {
+    const hungry = bodyAt({ x: 0, y: 0 }, { mode: 'held' });
+    expect(spriteFrame(hungry, { hunger: 90, happiness: 100 })).toBe('idle');
+    const happy = bodyAt({ x: 0, y: 0 }, { mode: 'held' });
+    expect(spriteFrame(happy, { hunger: 0, happiness: 100 })).toBe('idle');
   });
 });
