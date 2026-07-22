@@ -5,12 +5,61 @@
     <title>팻</title>
     <style>
       body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
-      #pet { font-size: 18px; text-align: center; padding: 24px 0; }
-      #feed { display: block; width: 100%; padding: 10px; font-size: 15px; cursor: pointer; }
+      #pet { font-size: 28px; text-align: center; padding: 12px 0 20px; }
+      .gauge { margin-bottom: 14px; }
+      .gauge-head {
+        display: flex;
+        justify-content: space-between;
+        font-size: 13px;
+        margin-bottom: 4px;
+      }
+      .gauge-track {
+        height: 12px;
+        background: #e5e7eb;
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .gauge-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 6px;
+        transition: width 0.25s ease;
+      }
+      #hunger-fill { background: #ef4444; }
+      #happy-fill { background: #22c55e; }
+      #feed {
+        display: block;
+        width: 100%;
+        padding: 10px;
+        font-size: 15px;
+        cursor: pointer;
+        margin-top: 8px;
+      }
     </style>
   </head>
   <body>
     <div id="pet">🐾</div>
+
+    <div class="gauge">
+      <div class="gauge-head">
+        <span>배고픔</span>
+        <span><span id="hunger-val">0</span> / 100</span>
+      </div>
+      <div class="gauge-track" role="progressbar" aria-label="배고픔" aria-valuemin="0" aria-valuemax="100">
+        <div id="hunger-fill" class="gauge-fill"></div>
+      </div>
+    </div>
+
+    <div class="gauge">
+      <div class="gauge-head">
+        <span>행복</span>
+        <span><span id="happy-val">100</span> / 100</span>
+      </div>
+      <div class="gauge-track" role="progressbar" aria-label="행복" aria-valuemin="0" aria-valuemax="100">
+        <div id="happy-fill" class="gauge-fill"></div>
+      </div>
+    </div>
+
     <button id="feed">먹이 주기</button>
     <script src="./sidepanel.js"></script>
   </body>
