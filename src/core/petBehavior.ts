@@ -104,6 +104,18 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
 
     if (body.mode === 'perched') {
       // 요소 위에 앉음: perch.top 을 매 프레임 추종(스크롤 시 함께 이동) + 좌우 배회.
+      // 순찰 범위 붕괴(maxX<=minX: 요소가 스프라이트보다 좁거나 같음) 시엔 좌우 이동·facing 반전이
+      // 매 프레임 뒤집혀 초고속 진동한다 → 요소 중앙에 고정하고 정지(진동 제거).
+      if (maxX <= minX) {
+        const cx = (perch.left + perch.right) / 2 - SPRITE_W / 2;
+        return {
+          pos: { x: cx, y: perchTopY },
+          vel: { x: 0, y: 0 },
+          mode: 'perched',
+          facing: body.facing,
+          clock,
+        };
+      }
       const vx = speed * body.facing;
       let x = body.pos.x + vx * dt;
       let facing = body.facing;
@@ -123,7 +135,9 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
       };
     }
 
-    const aligned = body.pos.x >= minX && body.pos.x <= maxX;
+    // 정렬 판정: 팻 중심이 요소 가로 범위 안이면 정렬로 인정한다(좁은 요소도 중심만 올리면 상승).
+    const petCenter = body.pos.x + SPRITE_W / 2;
+    const aligned = petCenter >= perch.left && petCenter <= perch.right;
     if (!aligned) {
       // perch 아래로 정렬되도록 지면에서 중심 쪽으로 걷는다(y 는 현 지면 유지).
       const center = (perch.left + perch.right) / 2;

@@ -320,6 +320,74 @@ describe('step — perch(요소 안착)', () => {
   });
 });
 
+describe('step — perch 좁은 요소(진동 버그 수정)', () => {
+  // 좁은 요소: perch.right - perch.left < SPRITE_W → 순찰 범위 붕괴(maxX<=minX).
+  function perchEnv(perch: { top: number; left: number; right: number }): Env {
+    return { viewport: { width: 800, height: 600 }, ground: 600 - SPRITE_H, perch };
+  }
+
+  it('좁은 요소에 perched 면 요소 중앙에 고정하고 vel.x=0(진동 없음)', () => {
+    // 폭 40 < SPRITE_W(64). 중앙 = (200+240)/2 - 32 = 188
+    const perch = { top: 300, left: 200, right: 240 };
+    const env = perchEnv(perch);
+    const perchTopY = perch.top - SPRITE_H;
+    const cx = (perch.left + perch.right) / 2 - SPRITE_W / 2;
+    const body = bodyAt({ x: 210, y: perchTopY }, { mode: 'perched', facing: 1 });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos.x).toBe(cx);
+    expect(next.vel.x).toBe(0);
+    expect(next.mode).toBe('perched');
+    expect(next.facing).toBe(1); // facing 불변
+  });
+
+  it('좁은 요소에 perched 면 여러 step 반복해도 진동/이동 없음(facing 불변)', () => {
+    const perch = { top: 300, left: 200, right: 240 };
+    const env = perchEnv(perch);
+    const perchTopY = perch.top - SPRITE_H;
+    const cx = (perch.left + perch.right) / 2 - SPRITE_W / 2;
+    let body: PetBody = bodyAt({ x: cx, y: perchTopY }, { mode: 'perched', facing: -1 });
+    for (let i = 0; i < 10; i++) {
+      const next = step(body, env, HEALTHY, 100);
+      expect(next.pos.x).toBe(cx); // 고정
+      expect(next.vel.x).toBe(0);
+      expect(next.facing).toBe(-1); // 반전 없음
+      expect(next.mode).toBe('perched');
+      body = next;
+    }
+  });
+
+  it('좁은 요소로 접근(!aligned) 시 팻 중심이 범위에 들면 상승 시작', () => {
+    // 폭 40 좁은 요소. 팻 중심이 요소 가로 범위 안이면 aligned 로 인정 → 상승.
+    const perch = { top: 300, left: 200, right: 240 };
+    const env = perchEnv(perch);
+    // pos.x=188 이면 중심 = 188+32 = 220, 이는 [200,240] 안 → aligned
+    const body = bodyAt({ x: 188, y: env.ground }, { mode: 'walking' });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos.y).toBeLessThan(env.ground); // 상승 시작
+  });
+
+  it('넓은 요소는 기존 순찰 유지(좌우 이동)', () => {
+    const perch = { top: 300, left: 200, right: 400 }; // 폭 200 > SPRITE_W
+    const env = perchEnv(perch);
+    const perchTopY = perch.top - SPRITE_H;
+    const body = bodyAt({ x: 250, y: perchTopY }, { mode: 'perched', facing: 1 });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos.x).toBeGreaterThan(250); // 이동함
+    expect(next.vel.x).toBeGreaterThan(0);
+  });
+
+  it('폭이 SPRITE_W 와 정확히 같으면(maxX===minX) 중앙 고정', () => {
+    const perch = { top: 300, left: 200, right: 200 + SPRITE_W };
+    const env = perchEnv(perch);
+    const perchTopY = perch.top - SPRITE_H;
+    const cx = (perch.left + perch.right) / 2 - SPRITE_W / 2; // = perch.left
+    const body = bodyAt({ x: 210, y: perchTopY }, { mode: 'perched', facing: 1 });
+    const next = step(body, env, HEALTHY, 100);
+    expect(next.pos.x).toBe(cx);
+    expect(next.vel.x).toBe(0);
+  });
+});
+
 describe('step — held(잡힘)', () => {
   it('held 면 body 를 그대로 반환한다(pos/vel/mode/facing/clock identity)', () => {
     const env = makeEnv();
