@@ -102,6 +102,9 @@ function startPetOverlay(): void {
   let lastMouseMoveAt = performance.now();
   let cursor = { x: 0, y: 0 };
   let haveCursor = false; // 최소 1회 mousemove 전엔 커서 위치를 모른다.
+  // 커서가 현재 뷰포트(문서) 안에 있는가. false 면 커서가 브라우저 밖(작업표시줄·타 창·타 모니터)일 수 있다.
+  // mousemove 로 true, document mouseleave/window blur 로 false. playing 진입·유지 조건에 쓴다.
+  let cursorInside = false;
 
   // 초기 body: 화면 상단에서 낙하 시작.
   let body: PetBody = {
@@ -214,10 +217,19 @@ function startPetOverlay(): void {
       eatingUntil = 0;
     }
 
+    // 노는 중 커서가 뷰포트 밖으로 나가면 즉시 해제(mouseleave/blur 로 cursorInside=false).
+    // 마지막(가장자리) 커서 위치로 날아가는 것을 막는다. 마우스 이동 시 해제와 동일 처리.
+    if (body.mode === 'playing' && !cursorInside) {
+      body.mode = 'falling';
+      body.vel = { x: 0, y: 0 };
+    }
+
     // 마우스가 IDLE_MOUSE_MS 이상 정지 → playing 진입.
     // 드래그·held·eating·falling(공중) 중에는 진입하지 않는다. 커서 위치를 알아야 이동 가능.
+    // cursorInside: 커서가 뷰포트 밖이면 진입 금지(고정된 오래된 위치로 날아가지 않도록).
     if (
       haveCursor &&
+      cursorInside &&
       !dragging &&
       body.mode !== 'held' &&
       body.mode !== 'eating' &&
@@ -298,10 +310,21 @@ function startPetOverlay(): void {
     lastMouseMoveAt = performance.now();
     cursor = { x: e.clientX, y: e.clientY };
     haveCursor = true;
+    cursorInside = true; // 커서가 페이지 위에 있음(밖으로 나갔다면 재진입으로 복구).
     if (body.mode === 'playing') {
       body.mode = 'falling'; // 다음 step 에서 중력으로 지면 복귀.
       body.vel = { x: 0, y: 0 };
     }
+  });
+
+  // 커서가 문서 밖으로 나감(다른 창·작업표시줄·모니터 밖). relatedTarget 이 없으면 뷰포트 이탈.
+  // cursorInside=false → frame() 이 playing 을 해제하고, 밖에 있는 동안 재진입도 막는다.
+  document.addEventListener('mouseout', (e: MouseEvent) => {
+    if (!e.relatedTarget) cursorInside = false;
+  });
+  // 창이 포커스를 잃으면 커서가 페이지 밖일 가능성 → 보수적으로 정지. 재진입은 mousemove 로 복구.
+  window.addEventListener('blur', () => {
+    cursorInside = false;
   });
 
   // ── 포인터 드래그(집기/이동/놓기) ──────────────────────────────────────
