@@ -13,7 +13,7 @@ const FRAME_H = 104;
 const TARGET_W = 58; // 주 캐릭터가 셀에서 차지할 최대 폭
 const TARGET_H = 100; // 주 캐릭터가 셀에서 차지할 최대 높이
 const FRAMES = ['idle', 'walk1', 'walk2', 'fall', 'happy', 'hungry', 'want_play', 'sleep', 'eat'];
-const BG_MIN = 236;
+const BG_MIN = 210;
 const ALPHA_THRESHOLD = 16;
 
 function hasTransparentBackground(png) {
@@ -26,7 +26,12 @@ function hasTransparentBackground(png) {
 /** 불투명 RGB 배경일 때만: 테두리에서 연결된 근백색을 flood-fill 로 투명화. */
 function keyBackground(png) {
   const { width: w, height: h, data } = png;
-  const isBg = (i) => data[i] >= BG_MIN && data[i + 1] >= BG_MIN && data[i + 2] >= BG_MIN;
+  // 밝고 무채색이면 배경(흰 배경 + 체커보드의 흰/회 두 색 모두 포함). 채도 있는 캐릭터는 제외.
+  const isBg = (i) => {
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+    return mn >= BG_MIN && mx - mn <= 20;
+  };
   const visited = new Uint8Array(w * h);
   const stack = [];
   const push = (x, y) => {
