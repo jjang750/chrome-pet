@@ -212,7 +212,7 @@ export async function makeSprite(srcPath, destPath) {
   return { width: sheet.width, height: sheet.height, frames: FRAMES.length };
 }
 
-const SRC = resolve(root, 'assets/frames/sprite_images_v4.png');
+const SRC = resolve(root, 'assets/frames/sprite_images_v6.png');
 const DEST = resolve(root, 'src/assets/pet.png');
 const info = await makeSprite(SRC, DEST);
 console.log(`sprite ok → src/assets/pet.png (${info.width}x${info.height}, frames ${info.frames})`);
