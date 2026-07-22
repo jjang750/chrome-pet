@@ -10,6 +10,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const FRAME_W = 64;
 const FRAME_H = 104;
+const MIRROR_X = true; // 소스 아트가 왼쪽을 보고 있어, 코드 기본(오른쪽 보기)에 맞추려 수평 반전한다.
 const TARGET_W = 58; // 주 캐릭터가 셀에서 차지할 최대 폭
 const TARGET_H = 100; // 주 캐릭터가 셀에서 차지할 최대 높이
 const FRAMES = ['idle', 'walk1', 'walk2', 'fall', 'happy', 'hungry', 'want_play', 'sleep', 'eat'];
@@ -193,7 +194,7 @@ export async function makeSprite(srcPath, destPath) {
     const baseX = f * FRAME_W;
     for (let y = 0; y < fh; y++) {
       for (let x = 0; x < fw; x++) {
-        const dxp = baseX + left + x;
+        const dxp = baseX + left + (MIRROR_X ? fw - 1 - x : x);
         const dyp = top + y;
         if (dxp < baseX || dxp >= baseX + FRAME_W || dyp < 0 || dyp >= FRAME_H) continue; // 셀 밖 클립
         const si = (y * fw + x) * 4;
