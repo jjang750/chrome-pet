@@ -1,6 +1,6 @@
 // petState 상태머신 단위 테스트 — 시간 주입으로 재현 가능
 import { describe, it, expect } from 'vitest';
-import { createPet, decay, feed } from './petState';
+import { createPet, decay, feed, rest } from './petState';
 
 const HOUR = 3_600_000;
 
@@ -54,5 +54,35 @@ describe('feed', () => {
   it('행복도는 100을 넘지 않는다', () => {
     const pet = { hunger: 50, happiness: 95, lastUpdated: 0 };
     expect(feed(pet).happiness).toBe(100);
+  });
+});
+
+describe('rest', () => {
+  it('배고픔은 20 감소, 행복도는 20 증가한다', () => {
+    const pet = { hunger: 50, happiness: 50, lastUpdated: 5 * HOUR };
+    const next = rest(pet);
+    expect(next.hunger).toBe(30);
+    expect(next.happiness).toBe(70);
+  });
+
+  it('lastUpdated 는 그대로 둔다(깬 뒤 decay 기준점 불변)', () => {
+    const pet = { hunger: 50, happiness: 50, lastUpdated: 5 * HOUR };
+    expect(rest(pet).lastUpdated).toBe(5 * HOUR);
+  });
+
+  it('배고픔은 0 미만으로 내려가지 않는다', () => {
+    const pet = { hunger: 10, happiness: 50, lastUpdated: 0 };
+    expect(rest(pet).hunger).toBe(0);
+  });
+
+  it('행복도는 100을 넘지 않는다', () => {
+    const pet = { hunger: 50, happiness: 90, lastUpdated: 0 };
+    expect(rest(pet).happiness).toBe(100);
+  });
+
+  it('순수 — 입력 상태를 변형하지 않는다', () => {
+    const pet = { hunger: 50, happiness: 50, lastUpdated: 0 };
+    rest(pet);
+    expect(pet).toEqual({ hunger: 50, happiness: 50, lastUpdated: 0 });
   });
 });

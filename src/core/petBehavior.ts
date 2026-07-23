@@ -53,8 +53,11 @@ export const WALK_MS = 5000;
 /** 지면에서 한 주기 중 멈춰 표정 짓는 시간 (ms). 짧게 두어 멈춤이 덜 거슬리게. */
 export const IDLE_MS = 900;
 
-/** 몇 주기(cycle)마다 한 번 낮잠(sleeping) 을 자는가. 매 SLEEP_EVERY 번째 cycle 의 idle 창에서 잔다. */
+/** 몇 주기(cycle)마다 한 번 낮잠(sleeping) 을 자는가. super-cycle 은 (SLEEP_EVERY-1)개의 일반 cycle + 1개의 sleep cycle 로 구성된다. */
 export const SLEEP_EVERY = 5;
+
+/** 낮잠(sleeping) 지속 시간 (ms). sleep cycle 에서 walk 를 마친 뒤 이만큼 잠든다. */
+export const SLEEP_MS = 10000;
 
 /**
  * mood 를 걷기 속도 배율(0.4~1.0)로 환산한다.
@@ -206,18 +209,36 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
     };
   }
 
-  // 지면 위 → 걷기/멈춤 주기.
-  const CYCLE = WALK_MS + IDLE_MS;
-  const cycleIndex = Math.floor(clock / CYCLE);
-  const phase = clock % CYCLE;
-  if (phase >= WALK_MS) {
-    // idle 창: 멈춰서 표정 짓는다. pos.x 유지.
-    // 매 SLEEP_EVERY 번째 cycle 의 idle 창에서는 낮잠(sleeping). 그 외엔 idle. 결정적(clock 만 사용).
-    const mode: PetMode = cycleIndex % SLEEP_EVERY === SLEEP_EVERY - 1 ? 'sleeping' : 'idle';
+  // 지면 위 → 걷기/멈춤/낮잠 주기 (super-cycle, 결정적: clock 만 사용).
+  // super-cycle = (SLEEP_EVERY-1)개의 일반 cycle(walk+idle) + 1개의 sleep cycle(walk 후 SLEEP_MS 동안 sleeping).
+  const NORMAL = WALK_MS + IDLE_MS;
+  const NORMAL_SPAN = (SLEEP_EVERY - 1) * NORMAL;
+  const SUPER = NORMAL_SPAN + WALK_MS + SLEEP_MS;
+  const t = clock % SUPER;
+  // resting=true 이면 이번 프레임은 정지(idle/sleeping), false 이면 아래 walk 로직으로 흐른다.
+  let resting = false;
+  let restMode: PetMode = 'idle';
+  if (t < NORMAL_SPAN) {
+    // 일반 cycle 구간: sub<WALK_MS 면 walk, 아니면 idle.
+    const sub = t % NORMAL;
+    if (sub >= WALK_MS) {
+      resting = true;
+      restMode = 'idle';
+    }
+  } else {
+    // sleep cycle: ts<WALK_MS 면 walk, 아니면(WALK_MS ~ WALK_MS+SLEEP_MS) sleeping.
+    const ts = t - NORMAL_SPAN;
+    if (ts >= WALK_MS) {
+      resting = true;
+      restMode = 'sleeping';
+    }
+  }
+  if (resting) {
+    // 멈춰서 표정 짓거나(idle) 낮잠 잔다(sleeping). pos.x 유지.
     return {
       pos: { x: body.pos.x, y: ground },
       vel: { x: 0, y: 0 },
-      mode,
+      mode: restMode,
       facing: body.facing,
       clock,
     };

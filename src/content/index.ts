@@ -17,8 +17,8 @@ window.Notification = ProxiedNotification as unknown as typeof Notification;
 // core 의 순수 물리 함수를 실제 DOM/뷰포트에 배선한다. 로직은 core, 여기선 배선만.
 import { step, spriteFrame, SPRITE_W, SPRITE_H } from '../core/petBehavior';
 import type { PetBody, Env, Mood } from '../core/petBehavior';
-import { createPet } from '../core/petState';
-import { loadPet } from '../chrome/storage';
+import { createPet, rest } from '../core/petState';
+import { loadPet, savePet } from '../chrome/storage';
 
 // spriteFrame 이 반환하는 프레임 키 → 시트 내 인덱스 (pet.png 는 이 순서로 9프레임).
 const FRAME_INDEX: Record<string, number> = {
@@ -255,6 +255,11 @@ function startPetOverlay(): void {
   let last = 0;
   let running = false;
 
+  // 잠에서 깨는 순간(sleeping → 비sleeping) 감지용 직전 mode. 깰 때 core rest() 를 1회 적용한다.
+  let prevMode = body.mode;
+  // rest 적용(비동기 load/save) 진행 중 플래그. 한 번의 깸에 rest 가 중복 적용되지 않게 막는다.
+  let resting = false;
+
   function frame(now: number): void {
     // dt 실측(ms). 첫 프레임·긴 정지 후엔 스텝이 튀지 않게 상한.
     const dtMs = last === 0 ? 16 : Math.min(now - last, 100);
@@ -326,6 +331,23 @@ function startPetOverlay(): void {
 
     try {
       body = step(body, env, mood, dtMs);
+
+      // 잠에서 깨는 순간(sleeping → 비sleeping) 감지 → storage.pet 에 rest() 1회 적용.
+      // prevMode 를 즉시 갱신해 비동기 load/save 동안 다음 프레임에서 재트리거되지 않게 한다.
+      if (prevMode === 'sleeping' && body.mode !== 'sleeping' && !resting) {
+        resting = true;
+        loadPet()
+          .then((pet) => {
+            if (!pet) return undefined; // 저장된 팻 없으면 skip.
+            return savePet(rest(pet));
+          })
+          .catch((err) => console.error('[pet] rest 적용 실패', err))
+          .finally(() => {
+            resting = false;
+          });
+      }
+      prevMode = body.mode;
+
       const idx = FRAME_INDEX[spriteFrame(body, mood)] ?? 0;
       el.style.transform = `translate(${body.pos.x}px, ${body.pos.y}px) scaleX(${body.facing})`;
       el.style.backgroundPositionX = `${-idx * SPRITE_W}px`;

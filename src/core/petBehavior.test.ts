@@ -12,6 +12,7 @@ import {
   WALK_MS,
   IDLE_MS,
   SLEEP_EVERY,
+  SLEEP_MS,
   type PetBody,
   type Env,
   type Mood,
@@ -481,44 +482,79 @@ describe('step — playing(마우스와 놀기)', () => {
   });
 });
 
-describe('step — sleeping(주기적 낮잠)', () => {
-  it('SLEEP_EVERY 상수가 export 된다', () => {
+describe('step — sleeping(super-cycle 낮잠)', () => {
+  it('SLEEP_EVERY / SLEEP_MS 상수가 export 된다', () => {
     expect(SLEEP_EVERY).toBeGreaterThan(0);
+    expect(SLEEP_MS).toBe(10000);
   });
 
-  const CYCLE = WALK_MS + IDLE_MS;
+  // super-cycle = (SLEEP_EVERY-1)번의 일반 cycle(walk+idle) + 1번의 sleep cycle(walk 후 SLEEP_MS 동안 sleeping)
+  const NORMAL = WALK_MS + IDLE_MS;
+  const NORMAL_SPAN = (SLEEP_EVERY - 1) * NORMAL; // super-cycle 중 일반 cycle 구간 길이
+  const SUPER = NORMAL_SPAN + WALK_MS + SLEEP_MS;
 
-  it('SLEEP_EVERY 번째 cycle 의 idle 창에서는 sleeping 이다', () => {
+  it('sleep cycle 의 walk 이후 SLEEP_MS 동안 sleeping 이 지속된다', () => {
     const env = makeEnv();
-    // cycleIndex = SLEEP_EVERY-1, phase = idle 창(WALK_MS 이후)
-    const clock = (SLEEP_EVERY - 1) * CYCLE + WALK_MS + 10;
-    const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
-    const next = step(body, env, HEALTHY, 0);
-    expect(next.mode).toBe('sleeping');
-    expect(next.vel.x).toBe(0);
-    expect(next.pos.x).toBe(100); // 위치 유지
+    // sleep cycle 은 super-cycle 의 마지막. walk(WALK_MS) 이후 SLEEP_MS 구간이 sleeping.
+    const sleepStart = NORMAL_SPAN + WALK_MS;
+    // 구간 시작·중간·거의 끝 여러 지점에서 sleeping 유지 확인
+    for (const offset of [1, SLEEP_MS / 2, SLEEP_MS - 1]) {
+      const clock = sleepStart + offset;
+      const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
+      const next = step(body, env, HEALTHY, 0);
+      expect(next.mode).toBe('sleeping');
+      expect(next.vel.x).toBe(0);
+      expect(next.pos.x).toBe(100); // 위치 유지
+    }
   });
 
-  it('sleep cycle 이 아닌 cycle 의 idle 창에서는 그냥 idle 이다', () => {
+  it('sleep cycle 의 walk 창(phase < WALK_MS)에서는 walking 이다', () => {
     const env = makeEnv();
-    // cycleIndex = 0 (SLEEP_EVERY-1 아님), phase = idle 창
-    const clock = 0 * CYCLE + WALK_MS + 10;
-    const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
-    const next = step(body, env, HEALTHY, 0);
-    expect(next.mode).toBe('idle');
-  });
-
-  it('sleep cycle 이라도 walk 창(phase < WALK_MS)에서는 walking 이다', () => {
-    const env = makeEnv();
-    const clock = (SLEEP_EVERY - 1) * CYCLE + 100; // walk 창
+    const clock = NORMAL_SPAN + 100; // sleep cycle 진입 직후 walk 창
     const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
     const next = step(body, env, HEALTHY, 50);
     expect(next.mode).toBe('walking');
   });
 
+  it('일반 cycle 의 idle 창에서는 sleeping 이 아니라 idle 이다', () => {
+    const env = makeEnv();
+    // super-cycle 앞쪽 일반 cycle 들의 idle 창은 모두 idle
+    for (let c = 0; c < SLEEP_EVERY - 1; c++) {
+      const clock = c * NORMAL + WALK_MS + 10; // c번째 일반 cycle 의 idle 창
+      const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
+      const next = step(body, env, HEALTHY, 0);
+      expect(next.mode).toBe('idle');
+    }
+  });
+
+  it('일반 cycle 의 walk 창에서는 walking 이다', () => {
+    const env = makeEnv();
+    const clock = 100; // 첫 일반 cycle walk 창
+    const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
+    const next = step(body, env, HEALTHY, 50);
+    expect(next.mode).toBe('walking');
+  });
+
+  it('SLEEP_MS 경과 후 다음 super-cycle 이 시작되면 다시 일반 cycle(walking)', () => {
+    const env = makeEnv();
+    // 정확히 한 super-cycle 뒤: 첫 일반 cycle 의 walk 창
+    const clock = SUPER + 100;
+    const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
+    const next = step(body, env, HEALTHY, 50);
+    expect(next.mode).toBe('walking');
+  });
+
+  it('두 번째 super-cycle 의 sleep 구간에서도 sleeping 이다', () => {
+    const env = makeEnv();
+    const clock = SUPER + NORMAL_SPAN + WALK_MS + 5;
+    const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
+    const next = step(body, env, HEALTHY, 0);
+    expect(next.mode).toBe('sleeping');
+  });
+
   it('결정적: 같은 clock 이면 항상 같은 sleeping 판정', () => {
     const env = makeEnv();
-    const clock = (2 * SLEEP_EVERY - 1) * CYCLE + WALK_MS + 5; // 다음 sleep cycle
+    const clock = NORMAL_SPAN + WALK_MS + 5; // sleep 구간
     const body = bodyAt({ x: 100, y: env.ground }, { mode: 'walking', facing: 1, clock });
     const a = step(body, env, HEALTHY, 0);
     const b = step(body, env, HEALTHY, 0);
