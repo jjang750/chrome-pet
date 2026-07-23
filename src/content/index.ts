@@ -132,9 +132,19 @@ function startPetOverlay(): void {
 
   // ── 요소 타깃팅(perch) ──────────────────────────────────────────────
   // querySelectorAll 은 비싸므로 재타깃 시점에만 실행. 매 프레임은 target.rect 만 읽는다.
-  const TARGET_SELECTOR = 'button, a, img, input, h1, h2';
-  const MIN_SIZE = 40; // px. 너무 작은 요소 제외.
-  const MAX_SIZE = 400; // px. 너무 큰 요소(레이아웃 덩어리) 제외.
+  // 후보를 넓히기 위해 `*`(모든 요소)를 훑되, 아래 필터로 즉시 걸러 유효한 것만 남긴다.
+  // 스크립트·비가시 태그는 후보에서 원천 제외해 스캔 비용과 오탐을 줄인다.
+  const EXCLUDE_TAGS = new Set([
+    'SCRIPT', 'STYLE', 'LINK', 'META', 'HEAD', 'NOSCRIPT', 'TITLE',
+    'BODY', 'HTML', 'MAIN', 'SVG', 'PATH', 'BR', 'HR', 'TEMPLATE',
+  ]);
+  // 후보 폭·높이 허용 범위(px). 너무 작은 아이콘/여백과 거대 레이아웃 래퍼를 함께 배제한다.
+  const MIN_W = 40;
+  const MAX_W = 400;
+  const MIN_H = 24;
+  const MAX_H = 320;
+  // `*` 스캔 시 rect 를 읽는 통과 후보 상한. 큰 페이지에서 레이아웃 스래싱을 막는다.
+  const MAX_SCAN = 4000;
   const RETARGET_INTERVAL = 4000; // ms. 타깃 없을 때 재탐색 쿨다운.
 
   let target: Element | null = null;
@@ -144,14 +154,23 @@ function startPetOverlay(): void {
   // perched 진입 시각(performance.now 기준). 0 이면 perched 아님. PERCH_MS 초과 시 타깃 release.
   let perchedSince = 0;
 
-  /** rect 가 perch 후보로 유효한가: 화면 안 + 크기 적당. el 이 우리 오버레이면 제외. */
+  /**
+   * rect 가 perch 후보로 유효한가: 보임 + 크기 적당 + 뷰포트 안.
+   * 오버레이(팻) 자신과 그 자식은 제외한다. 크기·가시성은 rect 와 getComputedStyle 로 판정.
+   * 넓은 `*` 스캔에서 쓰이므로 크기/뷰포트 등 값싼 검사를 먼저 하고 style 은 마지막에 읽는다.
+   */
   function isValidRect(node: Element, rect: DOMRect): boolean {
-    if (node === el) return false; // 오버레이 자신 제외.
-    if (rect.width < MIN_SIZE || rect.height < MIN_SIZE) return false;
-    if (rect.width > MAX_SIZE || rect.height > MAX_SIZE) return false;
+    if (node === el || el.contains(node)) return false; // 오버레이 자신·그 자식 제외.
+    // 크기: 폭·높이가 적당한 범위. 거대 컨테이너(래퍼)와 미세 요소를 함께 배제.
+    if (rect.width < MIN_W || rect.width > MAX_W) return false;
+    if (rect.height < MIN_H || rect.height > MAX_H) return false;
     // 뷰포트 안(상단이 화면 내, 좌우가 화면 내)에 실제로 보이는지.
     if (rect.top < 0 || rect.top > window.innerHeight - SPRITE_H) return false;
     if (rect.left < 0 || rect.right > window.innerWidth) return false;
+    // 보임: display/visibility/opacity 확인. 값비싼 검사라 마지막에.
+    const cs = getComputedStyle(node);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    if (parseFloat(cs.opacity) <= 0) return false;
     return true;
   }
 
@@ -161,19 +180,35 @@ function startPetOverlay(): void {
    * 후보가 lastLeftEl 하나뿐이면 그대로 허용한다.
    */
   function pickTarget(): Element | null {
+    // 1) 넓은 `*` 스캔으로 유효 후보를 수집한다. 스크립트/비가시 태그는 rect 도 읽지 않고 스킵.
+    //    rect 는 필터를 통과할 만한 후보에만 읽어 레이아웃 스래싱을 줄이고, MAX_SCAN 으로 상한.
+    const petCx = body.pos.x + SPRITE_W / 2;
+    const valid: { node: Element; cx: number }[] = [];
+    const nodes = document.body.querySelectorAll('*');
+    let scanned = 0;
+    for (const node of nodes) {
+      if (EXCLUDE_TAGS.has(node.tagName)) continue;
+      if (++scanned > MAX_SCAN) break; // 거대 페이지 대비 스캔 상한.
+      const rect = node.getBoundingClientRect();
+      if (!isValidRect(node, rect)) continue;
+      valid.push({ node, cx: (rect.left + rect.right) / 2 });
+    }
+
+    // 2) 거대 래퍼 회피: 유효 후보 A 가 다른 유효 후보 B 를 자식으로 포함하면 A 를 스킵한다.
+    //    → leaf 에 가까운 안쪽 요소를 우선. 후보 수가 많아도 O(n²) 는 유효 후보에만 적용되어 작다.
+    const leaves = valid.filter(
+      (a) => !valid.some((b) => b.node !== a.node && a.node.contains(b.node)),
+    );
+    const pool = leaves.length > 0 ? leaves : valid;
+
+    // 3) 팻 x 최근접 선택. lastLeftEl 은 다른 후보가 있으면 제외(오브젝트 간 이동).
     let best: Element | null = null;
     let bestDist = Infinity;
     let fallback: Element | null = null; // lastLeftEl 만 남았을 때의 예비.
     let fallbackDist = Infinity;
-    const petCx = body.pos.x + SPRITE_W / 2;
-    const nodes = document.querySelectorAll(TARGET_SELECTOR);
-    for (const node of nodes) {
-      const rect = node.getBoundingClientRect();
-      if (!isValidRect(node, rect)) continue;
-      const cx = (rect.left + rect.right) / 2;
+    for (const { node, cx } of pool) {
       const dist = Math.abs(cx - petCx);
       if (node === lastLeftEl) {
-        // 방금 떠난 요소는 예비로만 기록.
         if (dist < fallbackDist) {
           fallbackDist = dist;
           fallback = node;
