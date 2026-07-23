@@ -64,8 +64,9 @@ function startPetOverlay(): void {
 
   // mood 는 storage 단일 진실. 초기값은 기본 팻, 로드/변경 시 갱신.
   let mood: Mood = createPet(Date.now());
-  // 직전 hunger 값. 먹이 주기(hunger 감소) 감지에 쓴다. 초기엔 현재값으로 맞춰 첫 변경 오탐 방지.
-  let prevHunger = mood.hunger;
+  // 직전 fedAt 값. 먹이 버튼 클릭 신호 감지에 쓴다. 초기엔 현재 storage 값으로 맞춰
+  // 로드 직후 첫 변경 오탐 방지. undefined 면 아직 한 번도 먹인 적 없음.
+  let prevFedAt: number | undefined;
   // eating 종료 시각(performance.now 기준). 0 이면 먹는 중 아님.
   let eatingUntil = 0;
 
@@ -73,28 +74,42 @@ function startPetOverlay(): void {
     .then((pet) => {
       if (pet) {
         mood = { hunger: pet.hunger, happiness: pet.happiness };
-        prevHunger = pet.hunger;
       }
     })
     .catch((err) => console.error('[pet] loadPet failed', err));
 
+  // 초기 fedAt 을 현재 storage 값으로 맞춰 로드 직후 오탐 방지.
+  chrome.storage.local
+    .get('fedAt')
+    .then((result) => {
+      prevFedAt = result.fedAt as number | undefined;
+    })
+    .catch((err) => console.error('[pet] fedAt 초기 로드 실패', err));
+
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'local' || !changes.pet) return;
-    const pet = changes.pet.newValue as { hunger: number; happiness: number } | undefined;
-    if (!pet) return;
-    // hunger 가 감소했으면(사이드패널 먹이 주기) 먹는 중으로 전환.
-    // 단, 잡혀있거나(held)·공중(falling)일 땐 트리거하지 않는다. 지면 상태(walking/idle/sleeping)만.
-    if (
-      pet.hunger < prevHunger &&
-      body.mode !== 'held' &&
-      body.mode !== 'falling' &&
-      !dragging
-    ) {
-      body.mode = 'eating';
-      eatingUntil = performance.now() + EAT_MS;
+    if (area !== 'local') return;
+    // 먹이 버튼 클릭 신호: fedAt 이 새 값으로 바뀌면(배고픔과 무관) 먹는 중으로 전환.
+    // 단, 잡혀있거나(held)·공중(falling)·드래그 중엔 트리거하지 않는다.
+    // playing 중이면 먹이가 우선이라 eating 으로 전환한다.
+    if (changes.fedAt) {
+      const nextFedAt = changes.fedAt.newValue as number | undefined;
+      if (
+        nextFedAt !== undefined &&
+        nextFedAt !== prevFedAt &&
+        body.mode !== 'held' &&
+        body.mode !== 'falling' &&
+        !dragging
+      ) {
+        body.mode = 'eating';
+        eatingUntil = performance.now() + EAT_MS;
+      }
+      prevFedAt = nextFedAt;
     }
-    prevHunger = pet.hunger;
-    mood = { hunger: pet.hunger, happiness: pet.happiness };
+    // mood(게이지용 pet) 갱신은 그대로 유지.
+    if (changes.pet) {
+      const pet = changes.pet.newValue as { hunger: number; happiness: number } | undefined;
+      if (pet) mood = { hunger: pet.hunger, happiness: pet.happiness };
+    }
   });
 
   // ── 마우스 추적(playing 트리거) ─────────────────────────────────────
