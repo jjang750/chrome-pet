@@ -1,7 +1,7 @@
 // 드래그 이동 E2E — 착지한 팻을 포인터로 잡아 끌면 커서를 따라오고(held=idle 프레임),
 // 놓으면 그 지점에서 바닥으로 낙하 수렴하며 콘솔/전역 에러 0건 확인
 import { test, expect, type ConsoleMessage } from '@playwright/test';
-import { launchWithExtension } from './harness';
+import { launchWithExtension, gotoLocalPage } from './harness';
 
 // core/petBehavior 의 SPRITE_W/H 와 일치. 치수 변경 시 이 두 상수만 고치면 된다.
 // content 의 pointermove clamp 는 [0, innerWidth-SPRITE_W] × [0, innerHeight-SPRITE_H].
@@ -56,7 +56,7 @@ test('착지한 팻을 드래그하면 커서를 따라오고 놓으면 그 자�
     page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
 
     // perch 후보가 없는 최소 문서 → 팻은 낙하 후 지면에서 걷기/멈춤만 한다(드래그 방해 요소 없음).
-    await page.goto('data:text/html,<html><body style="margin:0"><h1>drag test</h1></body></html>');
+    await gotoLocalPage(page, '<html><body style="margin:0"><h1>drag test</h1></body></html>');
 
     const overlay = page.locator(OVERLAY_SELECTOR);
     await expect(overlay).toHaveCount(1, { timeout: 5000 });

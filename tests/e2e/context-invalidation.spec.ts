@@ -1,7 +1,7 @@
 // 확장 컨텍스트 무효화 E2E — 확장 리로드 후 content 오버레이가 스스로 제거되고
 // 'Extension context invalidated' 에러가 반복되지 않는지 확인(유령 팻·에러 스팸 회귀 방지)
 import { test, expect, type ConsoleMessage } from '@playwright/test';
-import { launchWithExtension } from './harness';
+import { launchWithExtension, gotoLocalPage } from './harness';
 
 // overlay.spec 와 동일하게 pet.png 참조로 오버레이 div 를 식별한다.
 const OVERLAY_SELECTOR = 'div[style*="pet.png"]';
@@ -22,9 +22,8 @@ test('확장 리로드로 컨텍스트가 무효화되면 오버레이가 스스
       )
       .toBe(true);
 
-    // content script 는 <all_urls> document_start 로 주입된다. 단, 최신 크롬은 최상위 data: URL
-    // 문서에는 주입하지 않으므로, route 로컬 응답으로 실제 https 출처를 만들어 그 위에서 검증한다
-    // (네트워크 의존 없음). 일반 http(s) 출처여야 content script 가 주입된다.
+    // content script 는 일반 http(s) 출처에만 주입된다(최신 크롬은 최상위 data: URL 에 미주입).
+    // gotoLocalPage 가 route 로컬 응답으로 실제 https 출처를 만들어 그 위에서 검증한다.
     const page = await context.newPage();
     const consoleErrors: string[] = [];
     page.on('console', (msg: ConsoleMessage) => {
@@ -32,13 +31,7 @@ test('확장 리로드로 컨텍스트가 무효화되면 오버레이가 스스
     });
     page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
 
-    await page.route('https://pet.test/**', (route) =>
-      route.fulfill({
-        contentType: 'text/html',
-        body: '<html><body><h1>ctx test</h1></body></html>',
-      }),
-    );
-    await page.goto('https://pet.test/');
+    await gotoLocalPage(page, '<html><body><h1>ctx test</h1></body></html>');
 
     // 오버레이가 정상 주입돼 붙는다.
     const overlay = page.locator(OVERLAY_SELECTOR);

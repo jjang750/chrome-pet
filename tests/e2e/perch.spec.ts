@@ -1,6 +1,6 @@
 // 요소 안착/낙하 E2E — 팻이 버튼 요소 상단에 perched 후, 요소 제거 시 바닥으로 낙하 수렴 + 에러 0건
 import { test, expect, type ConsoleMessage } from '@playwright/test';
-import { launchWithExtension } from './harness';
+import { launchWithExtension, gotoLocalPage } from './harness';
 
 // overlay.spec 과 동일하게 pet.png 참조로 오버레이 div 를 특정한다.
 const OVERLAY_SELECTOR = 'div[style*="pet.png"]';
@@ -65,7 +65,7 @@ test('팻이 버튼 요소 상단에 안착하고, 요소 제거 시 바닥으�
       '<html><body style="margin:0">' +
       '<button id="perch-target" style="position:fixed;left:120px;top:200px;width:120px;height:80px">TARGET</button>' +
       '</body></html>';
-    await page.goto('data:text/html,' + encodeURIComponent(html));
+    await gotoLocalPage(page, html);
 
     const overlay = page.locator(OVERLAY_SELECTOR);
     await expect(overlay).toHaveCount(1, { timeout: 5000 });

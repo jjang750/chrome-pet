@@ -1,7 +1,7 @@
 // 팻 오버레이 E2E — content 오버레이 div 존재·pointer-events·크기, pet.png 리소스 로드,
 // 낙하 후 바닥 근처 수렴, hungry 프레임 전환, 콘솔/전역 에러 0건 확인
 import { test, expect, type ConsoleMessage } from '@playwright/test';
-import { launchWithExtension } from './harness';
+import { launchWithExtension, gotoLocalPage } from './harness';
 
 // core/petBehavior 의 SPRITE_W/H 와 일치시킨다. 치수 변경 시 이 두 상수만 고치면 된다.
 // hungry 프레임 인덱스는 content 의 FRAME_INDEX.hungry = 5 → background-position-x = -5*SPRITE_W.
@@ -53,7 +53,7 @@ test('오버레이 div 가 붙고 바닥으로 낙하 수렴하며 hungry 프레
     });
     page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
 
-    await page.goto('data:text/html,<html><body><h1>overlay test</h1></body></html>');
+    await gotoLocalPage(page, '<html><body><h1>overlay test</h1></body></html>');
 
     // ── ① 오버레이 div 존재 + pointer-events:auto + SPRITE_W x SPRITE_H ───────────
     // 드래그 이동을 받으려면 오버레이가 포인터 이벤트를 받아야 한다(none→auto). 팻 영역(64×104)

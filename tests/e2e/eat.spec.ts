@@ -1,6 +1,6 @@
 // 먹이 애니메이션 E2E — fedAt 변화(먹이 신호) 감지 시 content 가 eating(-512px) 프레임을 ~2초 보여주는지 확인
 import { test, expect, type ConsoleMessage } from '@playwright/test';
-import { launchWithExtension } from './harness';
+import { launchWithExtension, gotoLocalPage } from './harness';
 
 // core/petBehavior 의 SPRITE_W/H 와 일치. content 의 FRAME_INDEX.eat = 8 → background-position-x = -8*SPRITE_W.
 const SPRITE_W = 64;
@@ -47,7 +47,7 @@ test('fedAt 변화(먹이) 감지 시 eating 프레임(-512px)이 ~2초 나타�
     });
     page.on('pageerror', (err) => consoleErrors.push(`pageerror: ${err.message}`));
 
-    await page.goto('data:text/html,<html><body><h1>eat test</h1></body></html>');
+    await gotoLocalPage(page, '<html><body><h1>eat test</h1></body></html>');
 
     const overlay = page.locator(OVERLAY_SELECTOR);
     await expect(overlay).toHaveCount(1, { timeout: 5000 });

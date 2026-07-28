@@ -1,6 +1,6 @@
 // 오브젝트 간 이동 E2E — 팻이 한 요소에 안착 → PERCH_MS(6s) 자동 하차 → 재타깃 시 다른 요소로 이동해 안착
 import { test, expect, type ConsoleMessage } from '@playwright/test';
-import { launchWithExtension } from './harness';
+import { launchWithExtension, gotoLocalPage } from './harness';
 
 // overlay/perch.spec 과 동일하게 pet.png 참조로 오버레이 div 를 특정한다.
 const OVERLAY_SELECTOR = 'div[style*="pet.png"]';
@@ -71,7 +71,7 @@ test('팻이 한 요소에 안착한 뒤 자동 하차 후 다른 요소로 이�
       `<button id="perch-a" style="position:fixed;left:${A_LEFT}px;top:${AB_TOP}px;width:${WIDTH}px;height:80px">A</button>` +
       `<button id="perch-b" style="position:fixed;left:${B_LEFT}px;top:${AB_TOP}px;width:${WIDTH}px;height:80px">B</button>` +
       '</body></html>';
-    await page.goto('data:text/html,' + encodeURIComponent(html));
+    await gotoLocalPage(page, html);
 
     const overlay = page.locator(OVERLAY_SELECTOR);
     await expect(overlay).toHaveCount(1, { timeout: 5000 });
