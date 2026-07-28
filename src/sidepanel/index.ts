@@ -1,6 +1,23 @@
 // side panel 진입점 — 저장된 팻 상태를 게이지로 렌더링하고 먹이 주기·실시간 갱신을 배선한다
 import { createPet, decay, feed, type PetState } from '../core/petState';
 import { loadPet } from '../chrome/storage';
+import { isExtensionContextValid } from '../chrome/context';
+
+// 확장이 갱신되면 이 패널은 죽은 컨텍스트를 참조한다. 매번 실패를 콘솔에 뿜는 대신
+// 한 번만 안내하고 먹이 버튼을 잠근다. 패널을 다시 열면 새 컨텍스트로 복구된다.
+let noticeShown = false;
+function showContextInvalidNotice(): void {
+  if (noticeShown) return;
+  noticeShown = true;
+  const pet = document.getElementById('pet');
+  if (pet) pet.textContent = '🔄';
+  const btn = document.getElementById('feed') as HTMLButtonElement | null;
+  if (btn) {
+    btn.textContent = '확장이 갱신됨 — 패널을 다시 열어주세요';
+    btn.disabled = true;
+  }
+  console.warn('확장 컨텍스트 무효화 — side panel 을 다시 열면 복구됩니다');
+}
 
 /** 진행바 채움과 숫자 라벨을 상태 값(0~100)에 맞춰 갱신한다. */
 function renderGauge(fillId: string, valId: string, trackSel: string, value: number): void {
@@ -19,6 +36,10 @@ function paint(pet: PetState): void {
 }
 
 async function render(): Promise<void> {
+  if (!isExtensionContextValid()) {
+    showContextInvalidNotice();
+    return;
+  }
   try {
     const pet = (await loadPet()) ?? createPet(Date.now());
     paint(pet);
@@ -28,6 +49,10 @@ async function render(): Promise<void> {
 }
 
 async function handleFeed(): Promise<void> {
+  if (!isExtensionContextValid()) {
+    showContextInvalidNotice();
+    return;
+  }
   try {
     const now = Date.now();
     // 상태의 단일 진실은 chrome.storage — 매번 새로 읽는다(메모리 보관 금지).

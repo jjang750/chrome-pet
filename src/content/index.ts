@@ -19,6 +19,7 @@ import { step, spriteFrame, SPRITE_W, SPRITE_H } from '../core/petBehavior';
 import type { PetBody, Env, Mood } from '../core/petBehavior';
 import { createPet, rest } from '../core/petState';
 import { loadPet, savePet } from '../chrome/storage';
+import { isExtensionContextValid } from '../chrome/context';
 
 // spriteFrame 이 반환하는 프레임 키 → 시트 내 인덱스 (pet.png 는 이 순서로 9프레임).
 const FRAME_INDEX: Record<string, number> = {
@@ -261,6 +262,15 @@ function startPetOverlay(): void {
   let resting = false;
 
   function frame(now: number): void {
+    // 확장이 리로드/업데이트되면 이 content script 는 죽은 컨텍스트를 참조한다.
+    // 계속 돌면 chrome.* 호출마다 'Extension context invalidated' 를 뿜고 팻도 깨진다.
+    // 루프를 멈추고 오버레이를 제거해 유령 팻과 에러 스팸을 끊는다(페이지 새로고침 시 새로 주입).
+    if (!isExtensionContextValid()) {
+      stop();
+      el.remove();
+      return;
+    }
+
     // dt 실측(ms). 첫 프레임·긴 정지 후엔 스텝이 튀지 않게 상한.
     const dtMs = last === 0 ? 16 : Math.min(now - last, 100);
     last = now;
