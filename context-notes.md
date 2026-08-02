@@ -61,3 +61,23 @@ make-sprite.mjs 재작성: 테두리 flood-fill로 근백색 배경 투명화(�
 ### 결정 5 — core/의 chrome.* 금지를 eslint로 강제
 full 커스텀 룰 대신 flat config override에서 no-restricted-globals로 src/core/** 에서
 `chrome` 전역 사용을 에러 처리. 가볍고 실효성 있음.
+
+### 결정 10 — 낮잠(sleeping)은 연출 전용, 상태 보상 제거
+증상 보고: "주말이 지났는데 팻이 배고픔을 안 느낀다."
+
+**측정으로 확인한 원인** (`step()` 1시간 시뮬레이션)
+- `petBehavior` super-cycle = 4×(WALK_MS 5000 + IDLE_MS 900) + WALK_MS 5000 + SLEEP_MS 10000 = **38.6초**
+- content 렌더 루프가 `sleeping → 비sleeping` 전이마다 `rest()`(배고픔 −20)를 storage 에 적용
+- 1시간당 깸 **93회** → **−1860/시간** vs `decay` **+10/시간** → 순 **−1850/시간** (회복이 감쇠보다 186배 빠름)
+- 결과: 48시간 방치로 hunger 100 이 되어도, 페이지에 팻이 뜬 뒤 깸 5회(**약 3.2분**)면 0 으로 리셋. 행복도도 같은 구조로 100 고정.
+- `decay` 자체는 정상이었다. 설정값 오타가 아니라 **애니메이션 주기에 상태 보상을 묶은 설계 충돌**이었다.
+
+**수정:** content 의 `rest()` 적용 블록 제거 + 유일한 호출자가 사라진 `core/petState.rest()` 제거.
+배고픔·행복도는 시간 경과(`decay`)와 사용자 행동(`feed`)으로만 변한다. 낮잠은 sleep 프레임 연출로만 남는다.
+
+**하네스 보강:** `tests/e2e/sleep-no-recovery.spec.ts` 추가.
+한 super-cycle(약 43초) 관측하며 (1) storage.pet.hunger 가 주입값 미만으로 내려가지 않는지,
+(2) 실제로 sleep 프레임(backgroundPositionX −448px)이 관측됐는지 함께 검증한다.
+(2)가 없으면 낮잠을 지나치지 않은 것이라 통과가 위장되므로 명시적으로 실패시킨다.
+버그 상태로 되돌려 실패(hunger 50 → 30)를 먼저 확인한 뒤 수정 후 통과를 확인했다.
+**교훈:** 결정 9 시점에 이 낮잠 보상은 E2E 커버리지가 없었다. 상태를 바꾸는 기능은 반드시 하네스 시나리오를 동반한다.

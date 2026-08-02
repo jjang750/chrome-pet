@@ -38,22 +38,6 @@ export function feed(state: PetState): PetState {
   };
 }
 
-/** 잠에서 깨면 배고픔이 20 줄고 행복이 20 오른다(각각 clamp). */
-const HUNGER_PER_REST = 20;
-const HAPPINESS_PER_REST = 20;
-
-/**
- * 잠에서 깨어난 회복. feed 와 같은 즉시 행동이므로 lastUpdated 는 그대로 둔다
- * (깬 뒤의 decay 기준점에 영향 없음). 순수 함수 — 같은 입력엔 항상 같은 출력.
- */
-export function rest(state: PetState): PetState {
-  return {
-    hunger: clamp(state.hunger - HUNGER_PER_REST),
-    happiness: clamp(state.happiness + HAPPINESS_PER_REST),
-    lastUpdated: state.lastUpdated,
-  };
-}
-
 /**
  * 경과 시간만큼 상태를 감쇠시킨다. now 를 인자로 받아 테스트 재현성을 보장한다.
  * now 가 lastUpdated 보다 과거면 상태를 그대로 반환한다(시계 역행 방어).

@@ -1,6 +1,6 @@
 // petState 상태머신 단위 테스트 — 시간 주입으로 재현 가능
 import { describe, it, expect } from 'vitest';
-import { createPet, decay, feed, rest } from './petState';
+import { createPet, decay, feed } from './petState';
 
 const HOUR = 3_600_000;
 
@@ -57,32 +57,18 @@ describe('feed', () => {
   });
 });
 
-describe('rest', () => {
-  it('배고픔은 20 감소, 행복도는 20 증가한다', () => {
-    const pet = { hunger: 50, happiness: 50, lastUpdated: 5 * HOUR };
-    const next = rest(pet);
-    expect(next.hunger).toBe(30);
-    expect(next.happiness).toBe(70);
+describe('주말 방치 시나리오 — decay 만으로 배고픔이 최대까지 오른다', () => {
+  it('48시간 경과 시 배고픔 100, 행복도 0 에 도달한다', () => {
+    const pet = { hunger: 0, happiness: 100, lastUpdated: 0 };
+    const next = decay(pet, 48 * HOUR);
+    expect(next.hunger).toBe(100);
+    expect(next.happiness).toBe(0);
   });
 
-  it('lastUpdated 는 그대로 둔다(깬 뒤 decay 기준점 불변)', () => {
-    const pet = { hunger: 50, happiness: 50, lastUpdated: 5 * HOUR };
-    expect(rest(pet).lastUpdated).toBe(5 * HOUR);
-  });
-
-  it('배고픔은 0 미만으로 내려가지 않는다', () => {
-    const pet = { hunger: 10, happiness: 50, lastUpdated: 0 };
-    expect(rest(pet).hunger).toBe(0);
-  });
-
-  it('행복도는 100을 넘지 않는다', () => {
-    const pet = { hunger: 50, happiness: 90, lastUpdated: 0 };
-    expect(rest(pet).happiness).toBe(100);
-  });
-
-  it('순수 — 입력 상태를 변형하지 않는다', () => {
-    const pet = { hunger: 50, happiness: 50, lastUpdated: 0 };
-    rest(pet);
-    expect(pet).toEqual({ hunger: 50, happiness: 50, lastUpdated: 0 });
+  it('배고픔 최대 상태에서 feed 한 번으로는 배부름에 도달하지 않는다', () => {
+    // 회복 경로는 feed 뿐이다(낮잠 등 시간 무관 회복 없음). 48시간 방치분을 되돌리려면
+    // 한 번의 feed(-30)로는 부족해야 정상 — 게이지가 실제로 의미를 갖는다.
+    const starved = decay({ hunger: 0, happiness: 100, lastUpdated: 0 }, 48 * HOUR);
+    expect(feed(starved).hunger).toBe(70);
   });
 });
