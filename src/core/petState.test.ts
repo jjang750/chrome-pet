@@ -1,13 +1,21 @@
 // petState 상태머신 단위 테스트 — 시간 주입으로 재현 가능
 import { describe, it, expect } from 'vitest';
-import { createPet, decay, feed } from './petState';
+import { chat, createPet, decay, feed, levelFromXp } from './petState';
 
 const HOUR = 3_600_000;
 
 describe('createPet', () => {
   it('초기 팻은 배부르고 행복하다', () => {
     const pet = createPet(1000);
-    expect(pet).toEqual({ hunger: 0, happiness: 100, lastUpdated: 1000 });
+    expect(pet).toEqual({
+      hunger: 0,
+      happiness: 100,
+      xp: 0,
+      level: 1,
+      bond: 0,
+      chatCount: 0,
+      lastUpdated: 1000,
+    });
   });
 });
 
@@ -70,5 +78,52 @@ describe('주말 방치 시나리오 — decay 만으로 배고픔이 최대까�
     // 한 번의 feed(-30)로는 부족해야 정상 — 게이지가 실제로 의미를 갖는다.
     const starved = decay({ hunger: 0, happiness: 100, lastUpdated: 0 }, 48 * HOUR);
     expect(feed(starved).hunger).toBe(70);
+  });
+});
+
+describe('chat', () => {
+  it('빈 메시지는 상태를 바꾸지 않고 안내 답변만 반환한다', () => {
+    const pet = createPet(0);
+    const result = chat(pet, '   ');
+    expect(result.state).toBe(pet);
+    expect(result.reply).toContain('말을 걸어주세요');
+  });
+
+  it('대화하면 경험치·레벨·친밀도·행복도가 오르고 약간 배고파진다', () => {
+    const pet = { hunger: 20, happiness: 40, xp: 45, level: 1, bond: 10, chatCount: 2, lastUpdated: 0 };
+    const result = chat(pet, '안녕');
+    expect(result.state).toMatchObject({
+      hunger: 22,
+      happiness: 48,
+      xp: 60,
+      level: 2,
+      bond: 16,
+      chatCount: 3,
+      lastUpdated: 0,
+    });
+    expect(result.reply).toContain('안녕');
+  });
+
+  it('기존 저장 데이터에 성장 필드가 없어도 기본값에서 성장시킨다', () => {
+    const pet = { hunger: 0, happiness: 95, lastUpdated: 0 };
+    const result = chat(pet, '좋아');
+    expect(result.state).toMatchObject({ xp: 15, level: 1, bond: 6, chatCount: 1 });
+  });
+
+  it('친밀도·행복도·배고픔은 범위 안으로 clamp 된다', () => {
+    const pet = { hunger: 99, happiness: 99, xp: 0, bond: 99, chatCount: 0, lastUpdated: 0 };
+    const result = chat(pet, '사랑해');
+    expect(result.state.hunger).toBe(100);
+    expect(result.state.happiness).toBe(100);
+    expect(result.state.bond).toBe(100);
+  });
+});
+
+describe('levelFromXp', () => {
+  it('경험치 50마다 레벨이 오른다', () => {
+    expect(levelFromXp(0)).toBe(1);
+    expect(levelFromXp(49)).toBe(1);
+    expect(levelFromXp(50)).toBe(2);
+    expect(levelFromXp(120)).toBe(3);
   });
 });
