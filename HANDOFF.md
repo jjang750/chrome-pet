@@ -71,13 +71,15 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - **push**: 2026-08-06 확인 기준 `git push origin main`이 에이전트에서 직접 실행된다(7/23에 기록된 "안전 게이트에 막힘"은 현재 해당 없음). 막히면 사용자가 `! git push origin main` 실행.
 - 기능 작업은 `fix/…`·`feat/…` 브랜치에서 하고, `npm run check` 그린 뒤 main에 ff 병합 → push 한다.
 - 커밋은 pathspec으로 chrome-pet 파일만 스코프. 커밋 메시지에 검증 결과 명시, 끝에 Co-Authored-By 트레일러.
-- **미커밋 잔여물**(의도적 제외): `assets/frames/`의 중간 아트(image-removebg-preview.png, sprite_images.png, v3, v5)와 루트 `dist.zip`/`dist.7z` — 정리 대상(불필요 시 삭제).
+- **워크스페이스 정리 완료**(2026-08-06): `dist.zip` 삭제 + `.gitignore` 등록, `.bkit/`·`session-save.txt`(에이전트 툴 세션 상태) gitignore, `AGENTS.md`·`.agents/`·`.codex/` 커밋, `assets/frames/`의 미추적 아트 4개 커밋. `git status` 클린 상태를 유지한다.
+- `assets/frames/`엔 중간 아트가 v1~v8까지 쌓여 있고 `make-sprite.mjs`가 참조하는 건 **v8 하나뿐**이다. v8만 남기고 정리해도 되지만 되돌릴 수 없어 보류했다 — 판단은 사용자 몫.
 
 ## 9. 에이전트 하네스 (개발 방식)
 
 이 프로젝트는 3인 전문가 팀 + 오케스트레이터로 개발한다.
 - **에이전트** `.claude/agents/`: `core-logic-dev`(순수 로직 TDD) · `chrome-adapter-dev`(크롬 API·SW·content·sidepanel) · `harness-qa`(검증 게이트·E2E·경계면).
 - **스킬** `.claude/skills/`: `pet-loop-orchestrator`(루프 진입점) + core-tdd · chrome-adapter · harness-qa-verify.
+- **Codex 쪽 대응물**: `AGENTS.md`(CLAUDE.md 대응) + `.agents/skills/`(같은 스킬 4개) + `.codex/agents/`(에이전트 3개 toml) + `.codex/hooks.json`. 하네스 규칙을 바꿀 땐 양쪽을 함께 고쳐야 어긋나지 않는다.
 - **루프**: 계획 → (실패 테스트) → 최소 구현 → `npm run check` → 커밋. core 변경은 core-logic-dev, 크롬 계층은 chrome-adapter-dev, 검증은 harness-qa.
 - 팻 기능 요청 시 `pet-loop-orchestrator` 스킬이 트리거됨(CLAUDE.md 섹션 5 참고).
 

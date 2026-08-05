@@ -2,3 +2,11 @@ node_modules/
 dist/
 playwright-report/
 test-results/
+
+# 빌드 산출물 압축본 (npm run build 로 재생성)
+dist.zip
+dist.7z
+
+# 에이전트 툴 세션 상태 — 세션마다 바뀌고 프로젝트 소스가 아니다
+.bkit/
+session-save.txt
