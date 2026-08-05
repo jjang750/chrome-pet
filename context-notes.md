@@ -101,3 +101,22 @@ full 커스텀 룰 대신 flat config override에서 no-restricted-globals로 sr
 chrome-pet 은 자체 저장소이고 remote 는 github.com/jjang750/chrome-pet.git, 기본 브랜치는 main 이다.
 → pathspec 스코프 스테이징은 이제 필수가 아니다. 다만 무관한 미커밋 산출물이 쌓이므로
    커밋 전 `git status` 확인 습관은 유지한다.
+
+### 결정 13 — perch 판정을 "선정"과 "체류" 로 분리 (결정 7-A 해소)
+
+결정 7 이 보류한 경계 A. perched 중 스크롤하면 요소가 화면에 크게 보이는데도 팻만 조기 낙하했다.
+
+**원인**: `isValidRect` 하나를 후보 선정(`pickTarget`)과 체류 유지(`computePerch`) 양쪽에 겸용했다.
+선정 기준은 "올라앉은 팻이 온전히 보여야" 하므로 `top <= innerHeight - SPRITE_H`(104px 여유)가 맞다.
+그 기준을 체류에도 적용하면, 스크롤로 요소 top 이 104px 밴드 안으로 들어오는 순간 타깃이 해제된다.
+상단은 여유 0(`top < 0`), 하단은 여유 104 — 결정 7 이 지적한 "클램프 비대칭" 이 이 겸용에서 나왔다.
+
+**수정**: 공통 조건(`isUsableRect`: 크기·좌우·가시성)을 뽑고 세로 기준만 둘로 나눴다.
+- 선정 `isValidRect` — `0 <= top <= innerHeight - SPRITE_H` (그대로 엄격)
+- 체류 `canKeepPerch` — `KEEP_MARGIN(16) <= top <= innerHeight - KEEP_MARGIN`
+즉 발끝이 화면에 남아 있는 동안은 유지하고, 새로 고를 때만 팻이 온전히 보이는 요소를 고른다.
+
+**하네스**: `tests/e2e/perch-scroll.spec.ts` 추가. 요소 top 을 "선정 기준 밖·체류 기준 안" 밴드(`vh-60`)로
+스크롤해 옮긴 뒤, 팻이 ground(`vh-104`)가 아니라 새 perch y(`vh-164`)를 1초간 추종하는지 표본 5개로 확인한다.
+수정 전 실패(바닥 낙하) → 수정 후 통과를 먼저 확인했다.
+- 밴드 판별이 성립하도록 두 y 가 20px 이상 벌어졌는지도 테스트가 직접 검사한다(뷰포트가 작아도 위장 통과 방지).

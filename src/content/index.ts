@@ -147,6 +147,9 @@ function startPetOverlay(): void {
   // `*` 스캔 시 rect 를 읽는 통과 후보 상한. 큰 페이지에서 레이아웃 스래싱을 막는다.
   const MAX_SCAN = 4000;
   const RETARGET_INTERVAL = 4000; // ms. 타깃 없을 때 재탐색 쿨다운.
+  // 이미 올라앉은 요소를 놓는 기준(px). 요소 top 이 화면 위·아래 끝에서 이만큼 안쪽에 있으면 유지한다.
+  // 선정 기준(SPRITE_H 여유)보다 느슨해, 스크롤로 요소가 밀렸다고 바로 떨어지지 않는다.
+  const KEEP_MARGIN = 16;
 
   let target: Element | null = null;
   let nextRetargetAt = 0; // performance.now() 기준.
@@ -156,23 +159,40 @@ function startPetOverlay(): void {
   let perchedSince = 0;
 
   /**
-   * rect 가 perch 후보로 유효한가: 보임 + 크기 적당 + 뷰포트 안.
-   * 오버레이(팻) 자신과 그 자식은 제외한다. 크기·가시성은 rect 와 getComputedStyle 로 판정.
+   * 세로 위치를 뺀 공통 조건: 오버레이 자신 아님 + 크기 적당 + 좌우가 화면 안 + 실제로 보임.
    * 넓은 `*` 스캔에서 쓰이므로 크기/뷰포트 등 값싼 검사를 먼저 하고 style 은 마지막에 읽는다.
    */
-  function isValidRect(node: Element, rect: DOMRect): boolean {
+  function isUsableRect(node: Element, rect: DOMRect): boolean {
     if (node === el || el.contains(node)) return false; // 오버레이 자신·그 자식 제외.
     // 크기: 폭·높이가 적당한 범위. 거대 컨테이너(래퍼)와 미세 요소를 함께 배제.
     if (rect.width < MIN_W || rect.width > MAX_W) return false;
     if (rect.height < MIN_H || rect.height > MAX_H) return false;
-    // 뷰포트 안(상단이 화면 내, 좌우가 화면 내)에 실제로 보이는지.
-    if (rect.top < 0 || rect.top > window.innerHeight - SPRITE_H) return false;
+    // 좌우가 화면 안(perched 순찰이 화면 밖으로 나가지 않도록).
     if (rect.left < 0 || rect.right > window.innerWidth) return false;
     // 보임: display/visibility/opacity 확인. 값비싼 검사라 마지막에.
     const cs = getComputedStyle(node);
     if (cs.display === 'none' || cs.visibility === 'hidden') return false;
     if (parseFloat(cs.opacity) <= 0) return false;
     return true;
+  }
+
+  /**
+   * rect 가 새 perch 후보로 유효한가(선정 기준, 엄격).
+   * 올라앉은 팻이 온전히 보이도록 요소 top 이 [0, innerHeight - SPRITE_H] 안이어야 한다.
+   */
+  function isValidRect(node: Element, rect: DOMRect): boolean {
+    if (rect.top < 0 || rect.top > window.innerHeight - SPRITE_H) return false;
+    return isUsableRect(node, rect);
+  }
+
+  /**
+   * 이미 올라앉은 요소를 계속 붙잡고 있어도 되는가(체류 기준, 느슨).
+   * 선정 기준을 그대로 쓰면 스크롤로 요소가 조금 밀리는 순간(top > innerHeight - SPRITE_H)
+   * 요소는 화면에 크게 보이는데 팻만 떨어진다 → 발끝이 화면에 남아 있는 동안은 유지한다.
+   */
+  function canKeepPerch(node: Element, rect: DOMRect): boolean {
+    if (rect.top < KEEP_MARGIN || rect.top > window.innerHeight - KEEP_MARGIN) return false;
+    return isUsableRect(node, rect);
   }
 
   /**
@@ -233,7 +253,8 @@ function startPetOverlay(): void {
         target = null;
       } else {
         const rect = target.getBoundingClientRect();
-        if (isValidRect(target, rect)) {
+        // 이미 올라앉은 요소는 느슨한 체류 기준으로 판정한다(선정 기준을 쓰면 조기 낙하).
+        if (canKeepPerch(target, rect)) {
           return { top: rect.top, left: rect.left, right: rect.right };
         }
         // 크기 0·화면 밖(스크롤 이탈 등) → 타깃 해제, 낙하.
