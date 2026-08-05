@@ -261,8 +261,11 @@ function startPetOverlay(): void {
         target = null;
       }
     }
-    // 타깃 없음: 쿨다운마다 재탐색.
-    if (now >= nextRetargetAt) {
+    // 타깃 없음: 팻이 지면에 있을 때만 쿨다운마다 재탐색한다.
+    // 공중(낙하·놀기)이나 드래그 중에 타깃을 잡으면, core 의 정렬 로직이 아직 정렬 안 된 팻을
+    // 지면 y 로 끌어내려(walking 분기의 `y: ground`) 순간이동처럼 보인다. 지면에서만 열어 이를 막는다.
+    const onGround = body.pos.y >= window.innerHeight - SPRITE_H - 0.5;
+    if (onGround && now >= nextRetargetAt) {
       nextRetargetAt = now + RETARGET_INTERVAL;
       target = pickTarget();
       if (target) {
@@ -335,7 +338,8 @@ function startPetOverlay(): void {
         lastLeftEl = target; // 다음 재타깃에서 제외하기 위해 기억.
         target = null;
         perchedSince = 0;
-        nextRetargetAt = now + RETARGET_INTERVAL; // 내려와 잠깐 배회 후 다음 요소로.
+        // 벽시계 쿨다운은 두지 않는다. 재타깃은 지면 도착 후에 열리고(computePerch 의 onGround 게이트),
+        // 방금 떠난 요소는 lastLeftEl 로 배제된다. 여기서 4초를 더 걸면 착지 후에도 그만큼 배회한다.
       }
     } else {
       perchedSince = 0; // perched 가 아니면 타이머 리셋(다음 perch 를 새로 계측).
