@@ -1,5 +1,5 @@
-// side panel 진입점 — 저장된 팻 상태를 게이지/성장 UI로 렌더링하고 먹이·대화를 배선한다
-import { chat, createPet, decay, feed, levelFromXp, type PetState } from '../core/petState';
+// side panel 진입점 — 저장된 팻 상태를 게이지로 렌더링하고 먹이 주기·실시간 갱신을 배선한다
+import { createPet, decay, feed, type PetState } from '../core/petState';
 import { loadPet } from '../chrome/storage';
 import { isExtensionContextValid } from '../chrome/context';
 
@@ -33,18 +33,6 @@ function renderGauge(fillId: string, valId: string, trackSel: string, value: num
 function paint(pet: PetState): void {
   renderGauge('hunger-fill', 'hunger-val', '.gauge-track[aria-label="배고픔"]', pet.hunger);
   renderGauge('happy-fill', 'happy-val', '.gauge-track[aria-label="행복"]', pet.happiness);
-  const xp = Math.max(0, pet.xp ?? 0);
-  const level = Math.max(1, pet.level ?? levelFromXp(xp));
-  const bond = Math.round(Math.min(100, Math.max(0, pet.bond ?? 0)));
-  const chatCount = Math.max(0, pet.chatCount ?? 0);
-  const levelVal = document.getElementById('level-val');
-  const bondVal = document.getElementById('bond-val');
-  const xpVal = document.getElementById('xp-val');
-  const chatCountVal = document.getElementById('chat-count-val');
-  if (levelVal) levelVal.textContent = String(level);
-  if (bondVal) bondVal.textContent = String(bond);
-  if (xpVal) xpVal.textContent = `${xp} XP`;
-  if (chatCountVal) chatCountVal.textContent = String(chatCount);
 }
 
 async function render(): Promise<void> {
@@ -81,36 +69,8 @@ async function handleFeed(): Promise<void> {
   }
 }
 
-async function handleChat(message: string): Promise<void> {
-  if (!isExtensionContextValid()) {
-    showContextInvalidNotice();
-    return;
-  }
-  try {
-    const now = Date.now();
-    // 대화도 storage 단일 진실을 매번 새로 읽은 뒤, 먼저 감쇠를 반영해 현재 상태에서 성장시킨다.
-    const current = (await loadPet()) ?? createPet(now);
-    const result = chat(decay(current, now), message);
-    await chrome.storage.local.set({ pet: result.state, chattedAt: Date.now() });
-    const reply = document.getElementById('chat-reply');
-    if (reply) reply.textContent = result.reply;
-    paint(result.state);
-  } catch (err) {
-    console.error('대화 처리 실패', err);
-  }
-}
-
 const feedButton = document.getElementById('feed');
 feedButton?.addEventListener('click', () => void handleFeed());
-
-const chatForm = document.getElementById('chat-form') as HTMLFormElement | null;
-const chatInput = document.getElementById('chat-input') as HTMLInputElement | null;
-chatForm?.addEventListener('submit', (event) => {
-  event.preventDefault();
-  const message = chatInput?.value ?? '';
-  if (chatInput) chatInput.value = '';
-  void handleChat(message);
-});
 
 // 알람 감쇠·외부 먹이 등 storage 'pet' 키가 바뀌면 즉시 다시 렌더(실시간 갱신).
 chrome.storage.onChanged.addListener((changes, area) => {

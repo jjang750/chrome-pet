@@ -35,39 +35,6 @@
         cursor: pointer;
         margin-top: 8px;
       }
-      .status-card {
-        border: 1px solid #e5e7eb;
-        border-radius: 10px;
-        padding: 10px;
-        margin: 14px 0;
-        background: #f9fafb;
-        font-size: 13px;
-      }
-      .status-row {
-        display: flex;
-        justify-content: space-between;
-        margin: 4px 0;
-      }
-      #chat-form { display: flex; gap: 6px; margin-top: 12px; }
-      #chat-input {
-        flex: 1;
-        min-width: 0;
-        padding: 9px;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-      }
-      #chat-submit {
-        padding: 9px 10px;
-        border: 1px solid #d1d5db;
-        border-radius: 8px;
-        cursor: pointer;
-      }
-      #chat-reply {
-        min-height: 18px;
-        margin-top: 8px;
-        font-size: 13px;
-        color: #374151;
-      }
     </style>
   </head>
   <body>
@@ -94,19 +61,6 @@
     </div>
 
     <button id="feed">먹이 주기</button>
-
-    <section class="status-card" aria-label="성장 상태">
-      <div class="status-row"><span>레벨</span><strong id="level-val">1</strong></div>
-      <div class="status-row"><span>친밀도</span><strong><span id="bond-val">0</span> / 100</strong></div>
-      <div class="status-row"><span>경험치</span><strong id="xp-val">0 XP</strong></div>
-      <div class="status-row"><span>대화</span><strong><span id="chat-count-val">0</span>회</strong></div>
-    </section>
-
-    <form id="chat-form">
-      <input id="chat-input" type="text" maxlength="80" placeholder="팻에게 말 걸기" aria-label="팻에게 말 걸기" />
-      <button id="chat-submit" type="submit">대화</button>
-    </form>
-    <div id="chat-reply" role="status" aria-live="polite">말을 걸면 친밀도와 경험치가 올라요.</div>
     <script src="./sidepanel.js"></script>
   </body>
 </html>
