@@ -4,7 +4,7 @@
 
 ## 1. 현재 상태 (한 줄)
 
-MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 배고픔·행복 UI. `npm run check` 그린(유닛 85 + E2E 12). GitHub: `jjang750/chrome-pet`.
+MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 배고픔·행복 UI + 캐릭터 선택. `npm run check` 그린(유닛 93 + E2E 13). GitHub: `jjang750/chrome-pet`.
 
 ## 2. 구현된 기능
 
@@ -16,7 +16,8 @@ MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드�
 - **배고픔 알람** — `chrome.alarms` 1분 주기로 decay(시간 경과 시 배고픔↑·행복↓). **배고픔·행복을 바꾸는 경로는 decay(시간)·feed(먹이) 둘뿐이다** — 결정 10·16 참고.
 - **추가 애니메이션** — 주기적 낮잠(sleep, 10초 유지), 행복 낮으면 칭얼(want_play), 행복 높으면 happy. 낮잠은 **연출 전용**으로 상태 보상이 없다.
 - **마우스 놀이** — 마우스 30초 정지 + 커서가 뷰포트 안이면 커서로 올라가 놀기(playing, happy 프레임). 마우스 이동/커서 이탈 시 해제.
-- **사이드패널** — 아이콘 클릭으로 열림(`setPanelBehavior`). 배고픔·행복 게이지 바 + 숫자, 먹이 주기 버튼, storage 변경 실시간 반영.
+- **사이드패널** — 아이콘 클릭으로 열림(`setPanelBehavior`). 배고픔·행복 게이지 바 + 숫자, 먹이 주기 버튼, 캐릭터 썸네일 선택, storage 변경 실시간 반영.
+- **캐릭터 선택** — 사이드패널 썸네일(각 시트의 idle 프레임)을 클릭하면 `character` 키에 id 가 저장되고, 열려 있는 모든 페이지의 오버레이가 새로고침 없이 시트를 갈아낀다. 위치·상태는 그대로 이어진다. 모르는 id 는 기본 캐릭터로 폴백.
 - **컨텍스트 무효화 자기 정리** — 확장 리로드/업데이트로 content script 컨텍스트가 죽으면 rAF 루프를 멈추고 오버레이를 제거한다(`isExtensionContextValid`). 리로드 후 유령 팻과 `Extension context invalidated` 에러 스팸을 끊는다.
 
 ## 3. 아키텍처 (core/chrome 분리)
@@ -25,26 +26,28 @@ MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드�
 src/
 ├─ core/            # 순수 로직 (크롬 API 없음, vitest로 빠르게 검증)
 │   ├─ petState.ts     # 배고픔·행복 상태머신 (createPet, decay, feed)
+│   ├─ characters.ts   # 선택 가능한 캐릭터 목록 + id 해석 (CHARACTERS, resolveCharacter)
 │   └─ petBehavior.ts  # 물리·행동 상태머신 (step, spriteFrame) + 모든 튜닝 상수
 ├─ chrome/
 │   ├─ storage.ts     # chrome.storage 어댑터 (loadPet/savePet)
 │   └─ context.ts     # isExtensionContextValid — 죽은 확장 컨텍스트 판정
 ├─ background/index.ts# service worker (알람 생성·decay, setPanelBehavior, 전역 에러 → __errors)
 ├─ content/index.ts   # 오버레이 rAF 렌더 + 요소 타깃팅 + 드래그·먹이·놀이 트리거 + 알림 프록시 + 컨텍스트 정리
-└─ sidepanel/         # 상태 게이지 + 먹이 버튼
+└─ sidepanel/         # 상태 게이지 + 먹이 버튼 + 캐릭터 썸네일 피커
+src/assets/ pet.png · pet2.png (캐릭터 시트, build 가 dist 로 전부 복사)
 scripts/  build.mjs · validate-manifest.mjs · make-sprite.mjs
-tests/e2e/ (12개) smoke·feed·alarm·overlay·drag·eat·context-invalidation·sleep-no-recovery
+tests/e2e/ (13개) smoke·feed·alarm·overlay·drag·eat·character·context-invalidation·sleep-no-recovery
            ·perch·perch-hop·perch-retarget·perch-scroll .spec.ts
 ```
 
-- **규칙**: `core/`엔 `chrome.*`·`Date.now()`·`Math.random()` 금지(eslint가 chrome 전역 차단). 시간·랜덤은 인자 주입. 위치는 페이지별 휘발성(메모리), 배고픔·행복만 `chrome.storage.local`에 저장.
+- **규칙**: `core/`엔 `chrome.*`·`Date.now()`·`Math.random()` 금지(eslint가 chrome 전역 차단). 시간·랜덤은 인자 주입. 위치는 페이지별 휘발성(메모리), 배고픔·행복(`pet`)과 캐릭터 선택(`character`)만 `chrome.storage.local`에 저장.
 
 ## 4. 검증·빌드
 
 | 명령 | 역할 |
 |---|---|
-| `npm run check` | lint→typecheck→test(vitest 85)→validate→build→**test:e2e(12)**. **완료 게이트, 이거 통과가 곧 완료.** 약 3분(E2E 2.8분) |
-| `npm run build` | esbuild 번들 + `src/assets/pet.png` 복사 → `dist/` |
+| `npm run check` | lint→typecheck→test(vitest 93)→validate→build→**test:e2e(13)**. **완료 게이트, 이거 통과가 곧 완료.** 약 3분(E2E 2.8분) |
+| `npm run build` | esbuild 번들 + `src/assets/*.png` 전부 복사 → `dist/`. **`dist/`는 매 빌드마다 통째로 지워진다** — 아트를 `dist/`에 두면 사라지니 `src/assets/`에 넣을 것 |
 | `npm run test:e2e` | Playwright (headed chromium 필요, 최초 `npx playwright install chromium`) |
 
 E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느려진 대가로 "유닛은 그린인데 확장이 깨진" 상태가 커밋되는 것을 막는다.
@@ -67,6 +70,8 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - `scripts/make-sprite.mjs`가 원본 시트를 읽어 `src/assets/pet.png` 생성. 기능: 배경 투명화(불투명 소스면 무채색 flood-fill, 이미 투명이면 알파 그대로), 프레임 분리(9 균등/갭), **주 캐릭터 기준 크기·바닥 정렬**(장식 잘림 방지), **좌우 반전**(`MIRROR_X=true` — 소스가 왼쪽 보기라 오른쪽 보기로 뒤집음).
 - 현재 소스: `assets/frames/sprite_images_v8.png`. **새 아트 교체법**: `assets/frames/`에 넣고 make-sprite의 `SRC`만 바꿔 `node scripts/make-sprite.mjs` → `pet.png` 재생성 → 눈으로 확인 → `npm run check`.
 - 아트 규칙: 가로 한 줄 9칸·균일·라벨 없음·진짜 알파 투명. 오른쪽 보기로 그려주면 `MIRROR_X=false`로 바꾸면 됨.
+- **캐릭터 추가법**: ① 576×104 시트를 `src/assets/<id>.png` 로 넣고 ② `src/core/characters.ts` 의 `CHARACTERS` 에 `{id,name,sprite}` 추가 ③ `manifest.json` 의 `web_accessible_resources` 에 파일명 추가. 셋 중 하나라도 빠지면 `npm run validate` 가 잡는다. `build.mjs` 는 손댈 필요 없다.
+- **캐릭터마다 그려진 크기는 달라도 된다** — 셀 규격(64×104)과 프레임 순서만 지키면 된다. `pet2.png` 는 의도적으로 `pet.png` 절반 크기다. 단 **바닥 정렬**(내용 최하단이 y=103)은 맞춰야 지면에 뜨지 않는다.
 
 ## 8. Git
 
@@ -95,4 +100,5 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - **남은 제약**: 요소 간 **공중 도약은 불가**. 팻은 지면까지 내려온 뒤 다음 요소로 걸어간다. 도약을 원하면 core 에 점프 행동을 추가해야 한다.
 - **상태를 바꾸는 기능엔 반드시 E2E 를 붙인다.** 낮잠 회복 버그(결정 10)가 이 규칙이 없어 통과됐다.
 - **대화 기반 성장(레벨·친밀도·XP·대화 횟수)은 2026-08-06 에 롤백됐다**(결정 16). 되살리려면 `git revert` 로 되돌린 커밋 `7419696` 을 다시 적용하면 된다.
-- **의사결정·근거**는 `context-notes.md`(결정 1~16)에, 체크리스트는 `checklist.md`에 있음.
+- **`pet2.png` 는 저해상도다.** 원본 고해상도 아트가 없어 이미 축소된 576×104 시트를 그대로 쓴다. 분홍이와 같은 크기로 키우려면 고해상도 원본을 받아 `make-sprite.mjs` 로 재생성해야 한다 — 지금 시트를 업스케일하면 뭉개진다.
+- **의사결정·근거**는 `context-notes.md`(결정 1~17)에, 체크리스트는 `checklist.md`에 있음.
