@@ -22,7 +22,7 @@
   ],
   "web_accessible_resources": [
     {
-      "resources": ["pet.png"],
+      "resources": ["pet.png", "pet2.png"],
       "matches": ["<all_urls>"]
     }
   ]

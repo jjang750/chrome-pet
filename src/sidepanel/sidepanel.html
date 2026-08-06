@@ -35,6 +35,31 @@
         cursor: pointer;
         margin-top: 8px;
       }
+      .section-title { font-size: 13px; color: #6b7280; margin: 20px 0 8px; }
+      #characters { display: flex; gap: 8px; }
+      .char-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 4px;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        background: #fff;
+        cursor: pointer;
+        font: inherit;
+      }
+      .char-btn[aria-pressed='true'] { border-color: #22c55e; background: #f0fdf4; }
+      /* idle 프레임(시트 인덱스 0)만 보여주는 미리보기. 셀 규격 64x104 고정. */
+      .char-thumb {
+        width: 64px;
+        height: 104px;
+        background-repeat: no-repeat;
+        background-position: 0 0;
+        image-rendering: pixelated;
+      }
+      .char-name { font-size: 12px; }
     </style>
   </head>
   <body>
@@ -61,6 +86,11 @@
     </div>
 
     <button id="feed">먹이 주기</button>
+
+    <div class="section-title">캐릭터</div>
+    <!-- 버튼은 core/characters.ts 의 목록을 보고 sidepanel.js 가 채운다. -->
+    <div id="characters" role="group" aria-label="캐릭터 선택"></div>
+
     <script src="./sidepanel.js"></script>
   </body>
 </html>

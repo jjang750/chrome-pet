@@ -16,6 +16,7 @@ window.Notification = ProxiedNotification as unknown as typeof Notification;
 // ── 팻 오버레이 + requestAnimationFrame 렌더 루프 ─────────────────────────────
 // core 의 순수 물리 함수를 실제 DOM/뷰포트에 배선한다. 로직은 core, 여기선 배선만.
 import { step, spriteFrame, SPRITE_W, SPRITE_H } from '../core/petBehavior';
+import { resolveCharacter } from '../core/characters';
 import type { PetBody, Env, Mood } from '../core/petBehavior';
 import { createPet } from '../core/petState';
 import { loadPet } from '../chrome/storage';
@@ -59,9 +60,14 @@ function startPetOverlay(): void {
     'cursor:grab', // 잡을 수 있음을 표시. 잡는 중엔 grabbing 으로 전환.
     'image-rendering:pixelated',
     'background-repeat:no-repeat',
-    `background-image:url(${chrome.runtime.getURL('pet.png')})`,
+    `background-image:url(${chrome.runtime.getURL(resolveCharacter(undefined).sprite)})`,
   ].join(';');
   document.body.appendChild(el);
+
+  /** 선택된 캐릭터의 시트로 배경 이미지를 교체한다. 프레임 규격이 같아 위치 계산은 그대로다. */
+  const applyCharacter = (id: string | undefined): void => {
+    el.style.backgroundImage = `url(${chrome.runtime.getURL(resolveCharacter(id).sprite)})`;
+  };
 
   // mood 는 storage 단일 진실. 초기값은 기본 팻, 로드/변경 시 갱신.
   let mood: Mood = createPet(Date.now());
@@ -80,15 +86,21 @@ function startPetOverlay(): void {
     .catch((err) => console.error('[pet] loadPet failed', err));
 
   // 초기 fedAt 을 현재 storage 값으로 맞춰 로드 직후 오탐 방지.
+  // character 는 같은 호출에서 함께 읽어 선택된 캐릭터로 첫 렌더를 맞춘다.
   chrome.storage.local
-    .get('fedAt')
+    .get(['fedAt', 'character'])
     .then((result) => {
       prevFedAt = result.fedAt as number | undefined;
+      applyCharacter(result.character as string | undefined);
     })
-    .catch((err) => console.error('[pet] fedAt 초기 로드 실패', err));
+    .catch((err) => console.error('[pet] fedAt·character 초기 로드 실패', err));
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
+    // 캐릭터 선택 변경: 배경 시트만 갈아끼운다. 위치·상태는 그대로 이어진다.
+    if (changes.character) {
+      applyCharacter(changes.character.newValue as string | undefined);
+    }
     // 먹이 버튼 클릭 신호: fedAt 이 새 값으로 바뀌면(배고픔과 무관) 먹는 중으로 전환.
     // 단, 잡혀있거나(held)·공중(falling)·드래그 중엔 트리거하지 않는다.
     // playing 중이면 먹이가 우선이라 eating 으로 전환한다.

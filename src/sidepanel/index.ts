@@ -1,5 +1,6 @@
 // side panel 진입점 — 저장된 팻 상태를 게이지로 렌더링하고 먹이 주기·실시간 갱신을 배선한다
 import { createPet, decay, feed, type PetState } from '../core/petState';
+import { CHARACTERS, resolveCharacter } from '../core/characters';
 import { loadPet } from '../chrome/storage';
 import { isExtensionContextValid } from '../chrome/context';
 
@@ -72,12 +73,71 @@ async function handleFeed(): Promise<void> {
 const feedButton = document.getElementById('feed');
 feedButton?.addEventListener('click', () => void handleFeed());
 
+/** 선택 상태 표시를 저장된 id 기준으로 맞춘다(aria-pressed 가 곧 선택 표시). */
+function paintCharacterSelection(id: string | undefined): void {
+  const selected = resolveCharacter(id).id;
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('.char-btn')) {
+    btn.setAttribute('aria-pressed', String(btn.dataset.characterId === selected));
+  }
+}
+
+async function selectCharacter(id: string): Promise<void> {
+  if (!isExtensionContextValid()) {
+    showContextInvalidNotice();
+    return;
+  }
+  try {
+    // 캐릭터는 팻의 생체 상태(pet)와 무관한 표시 설정이라 별도 키로 저장한다.
+    await chrome.storage.local.set({ character: id });
+    // onChanged 도 발화하지만 즉각 반영을 위해 직접 갱신.
+    paintCharacterSelection(id);
+  } catch (err) {
+    console.error('캐릭터 선택 실패', err);
+  }
+}
+
+/** CHARACTERS 목록으로 썸네일 버튼을 만든다. 썸네일은 시트의 idle 프레임(인덱스 0). */
+function buildCharacterPicker(): void {
+  const host = document.getElementById('characters');
+  if (!host) return;
+  for (const character of CHARACTERS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'char-btn';
+    btn.dataset.characterId = character.id;
+    btn.setAttribute('aria-pressed', 'false');
+
+    const thumb = document.createElement('div');
+    thumb.className = 'char-thumb';
+    thumb.style.backgroundImage = `url(${chrome.runtime.getURL(character.sprite)})`;
+
+    const name = document.createElement('span');
+    name.className = 'char-name';
+    name.textContent = character.name;
+
+    btn.append(thumb, name);
+    btn.addEventListener('click', () => void selectCharacter(character.id));
+    host.appendChild(btn);
+  }
+}
+
 // 알람 감쇠·외부 먹이 등 storage 'pet' 키가 바뀌면 즉시 다시 렌더(실시간 갱신).
+// 다른 창의 패널에서 캐릭터를 바꿨을 때도 선택 표시를 따라간다.
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !changes.pet) return;
+  if (area !== 'local') return;
+  if (changes.character) {
+    paintCharacterSelection(changes.character.newValue as string | undefined);
+  }
+  if (!changes.pet) return;
   const next = changes.pet.newValue as PetState | undefined;
   if (next) paint(next);
   else void render();
 });
+
+buildCharacterPicker();
+void chrome.storage.local
+  .get('character')
+  .then((result) => paintCharacterSelection(result.character as string | undefined))
+  .catch((err) => console.error('캐릭터 선택 로드 실패', err));
 
 void render();
