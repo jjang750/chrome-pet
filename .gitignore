@@ -10,3 +10,4 @@ dist.7z
 # 에이전트 툴 세션 상태 — 세션마다 바뀌고 프로젝트 소스가 아니다
 .bkit/
 session-save.txt
+.playwright-mcp/
