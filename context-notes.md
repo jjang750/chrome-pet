@@ -165,3 +165,27 @@ chrome-pet 은 자체 저장소이고 remote 는 github.com/jjang750/chrome-pet.
 - `chattedAt` 을 storage 에 쓰지만 읽는 곳이 없다. `fedAt` 은 content 가 읽어 eat 애니메이션을 트는데,
   대화 전용 연출은 아직 없다. 훅만 남긴 상태 — 연출을 붙이거나 키를 지우거나 둘 중 하나로 정리해야 한다.
 - 레벨·친밀도가 사이드패널 숫자로만 존재하고 팻의 외형·행동에 반영되지 않는다.
+
+### 결정 16 — 대화 기반 성장 롤백 (결정 15 철회)
+
+사용자 판단으로 **레벨·친밀도 같은 성장 기능은 이 팻에 필요 없다**고 결론냈다.
+결정 15 에서 사후 기록했던 기능을 그대로 되돌린다.
+
+**방식**: `git reset` 이 아니라 `git revert 7419696` 을 썼다. 두 가지 이유다.
+- 성장 커밋 뒤에 perch 버그 수정 2건(`3938708` 조기 낙하, `b6505a3` 재타깃 게이트)과 워크스페이스 정리(`aeeb028`)가
+  쌓여 있다. 성장 기능과 무관한 수정이라 reset 하면 같이 날아간다.
+- `7419696` 은 이미 `origin/main` 에 push 돼 있어 reset 은 force-push 를 요구한다. revert 는 이력을 보존한다.
+
+되돌린 커밋이 건드린 파일은 5개(`petState.ts`·`petState.test.ts`·`sidepanel/index.ts`·`sidepanel.html`·`tests/e2e/chat.spec.ts`)뿐이고,
+이후 커밋들이 이 파일들을 손대지 않아 **충돌 없이 revert 됐다.** `bond|xp|level|chatCount|chattedAt` 전수 검색으로 잔여 참조 0건을 확인했다.
+
+**불변식 복구**: 결정 15 가 셋으로 늘렸던 "배고픔·행복을 바꾸는 경로" 가 다시 **decay(시간)·feed(먹이) 둘**로 돌아왔다.
+결정 10 이 세운 원래 불변식 그대로다.
+
+**부수 정리**: `chattedAt` storage 키도 함께 사라졌다. 결정 15 가 "소비처 없는 훅" 으로 남겨둔 항목이었는데
+롤백으로 자연히 해소됐다 — content 는 여전히 `fedAt` 만 읽는다.
+
+**게이트**: `npm run check` 그린. 유닛 90→85(chat/levelFromXp 테스트 5개 제거), E2E 13→12(`chat.spec.ts` 제거).
+
+**되살리는 법**: 성장 기능이 다시 필요해지면 이 revert 커밋을 되돌리면 된다(`git revert <이 커밋>`).
+원본 구현은 `7419696` 에 그대로 남아 있다.

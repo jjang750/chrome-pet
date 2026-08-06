@@ -4,7 +4,7 @@
 
 ## 1. 현재 상태 (한 줄)
 
-MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 상태·성장 UI. `npm run check` 그린(유닛 90 + E2E 13), `origin/main`과 완전 동기화(HEAD `aeeb028`). GitHub: `jjang750/chrome-pet`.
+MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 배고픔·행복 UI. `npm run check` 그린(유닛 85 + E2E 12). GitHub: `jjang750/chrome-pet`.
 
 ## 2. 구현된 기능
 
@@ -13,11 +13,10 @@ MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드�
 - **요소 안착(perch)** — 보이는 적당한 크기 요소 전반(div·카드·문단·목록·헤딩·버튼 등)으로 걸어가 올라앉음. 6초 체류 후 내려와 다른 요소로 이동. 거대 래퍼/안 보이는 요소 제외.
 - **드래그** — 마우스로 팻을 잡아(held) 끌고, 놓으면 낙하.
 - **먹이 주기** — 사이드패널 버튼 → `fedAt` 신호 → content가 2초 eat 애니메이션(배부른 팻도 반응).
-- **배고픔 알람** — `chrome.alarms` 1분 주기로 decay(시간 경과 시 배고픔↑·행복↓). **배고픔·행복을 바꾸는 경로는 decay(시간)·feed(먹이)·chat(대화) 셋뿐이다** — 결정 10·15 참고.
-- **대화 기반 성장** — 사이드패널 입력창에 말을 걸면 `chat()`이 경험치 +15·친밀도 +6·행복 +8·배고픔 +2 를 적용하고 대화 횟수를 센다. 50 XP 마다 레벨 +1(`levelFromXp`). 답변은 배고픔·행복·키워드에 따른 고정 문구로, LLM 호출은 없다.
+- **배고픔 알람** — `chrome.alarms` 1분 주기로 decay(시간 경과 시 배고픔↑·행복↓). **배고픔·행복을 바꾸는 경로는 decay(시간)·feed(먹이) 둘뿐이다** — 결정 10·16 참고.
 - **추가 애니메이션** — 주기적 낮잠(sleep, 10초 유지), 행복 낮으면 칭얼(want_play), 행복 높으면 happy. 낮잠은 **연출 전용**으로 상태 보상이 없다.
 - **마우스 놀이** — 마우스 30초 정지 + 커서가 뷰포트 안이면 커서로 올라가 놀기(playing, happy 프레임). 마우스 이동/커서 이탈 시 해제.
-- **사이드패널** — 아이콘 클릭으로 열림(`setPanelBehavior`). 배고픔·행복 게이지 바 + 숫자, 레벨·친밀도·XP·대화 횟수 카드, 대화 입력폼, storage 변경 실시간 반영.
+- **사이드패널** — 아이콘 클릭으로 열림(`setPanelBehavior`). 배고픔·행복 게이지 바 + 숫자, 먹이 주기 버튼, storage 변경 실시간 반영.
 - **컨텍스트 무효화 자기 정리** — 확장 리로드/업데이트로 content script 컨텍스트가 죽으면 rAF 루프를 멈추고 오버레이를 제거한다(`isExtensionContextValid`). 리로드 후 유령 팻과 `Extension context invalidated` 에러 스팸을 끊는다.
 
 ## 3. 아키텍처 (core/chrome 분리)
@@ -25,26 +24,26 @@ MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드�
 ```
 src/
 ├─ core/            # 순수 로직 (크롬 API 없음, vitest로 빠르게 검증)
-│   ├─ petState.ts     # 배고픔·행복·성장 상태머신 (createPet, decay, feed, chat, levelFromXp)
+│   ├─ petState.ts     # 배고픔·행복 상태머신 (createPet, decay, feed)
 │   └─ petBehavior.ts  # 물리·행동 상태머신 (step, spriteFrame) + 모든 튜닝 상수
 ├─ chrome/
 │   ├─ storage.ts     # chrome.storage 어댑터 (loadPet/savePet)
 │   └─ context.ts     # isExtensionContextValid — 죽은 확장 컨텍스트 판정
 ├─ background/index.ts# service worker (알람 생성·decay, setPanelBehavior, 전역 에러 → __errors)
 ├─ content/index.ts   # 오버레이 rAF 렌더 + 요소 타깃팅 + 드래그·먹이·놀이 트리거 + 알림 프록시 + 컨텍스트 정리
-└─ sidepanel/         # 상태 게이지 + 성장 카드 + 대화 폼 + 먹이 버튼
+└─ sidepanel/         # 상태 게이지 + 먹이 버튼
 scripts/  build.mjs · validate-manifest.mjs · make-sprite.mjs
-tests/e2e/ (13개) smoke·feed·alarm·overlay·drag·eat·chat·context-invalidation·sleep-no-recovery
+tests/e2e/ (12개) smoke·feed·alarm·overlay·drag·eat·context-invalidation·sleep-no-recovery
            ·perch·perch-hop·perch-retarget·perch-scroll .spec.ts
 ```
 
-- **규칙**: `core/`엔 `chrome.*`·`Date.now()`·`Math.random()` 금지(eslint가 chrome 전역 차단). 시간·랜덤은 인자 주입. 위치는 페이지별 휘발성(메모리), 배고픔·행복·성장치(xp·level·bond·chatCount)만 `chrome.storage.local`에 저장.
+- **규칙**: `core/`엔 `chrome.*`·`Date.now()`·`Math.random()` 금지(eslint가 chrome 전역 차단). 시간·랜덤은 인자 주입. 위치는 페이지별 휘발성(메모리), 배고픔·행복만 `chrome.storage.local`에 저장.
 
 ## 4. 검증·빌드
 
 | 명령 | 역할 |
 |---|---|
-| `npm run check` | lint→typecheck→test(vitest 90)→validate→build→**test:e2e(13)**. **완료 게이트, 이거 통과가 곧 완료.** 약 3분(E2E 2.4분) |
+| `npm run check` | lint→typecheck→test(vitest 85)→validate→build→**test:e2e(12)**. **완료 게이트, 이거 통과가 곧 완료.** 약 3분(E2E 2.8분) |
 | `npm run build` | esbuild 번들 + `src/assets/pet.png` 복사 → `dist/` |
 | `npm run test:e2e` | Playwright (headed chromium 필요, 최초 `npx playwright install chromium`) |
 
@@ -60,7 +59,7 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 
 **`src/content/index.ts`**: `PERCH_MS=6000`(요소 체류) · `RETARGET_INTERVAL=4000` · `EAT_MS=2000` · `IDLE_MOUSE_MS=30000`(마우스 놀이) · `PLAY_LERP=0.15` · 후보 크기 필터(폭 40~400·높이 24~320).
 
-**`src/core/petState.ts`**: `HUNGER_PER_HOUR=10`/`HAPPINESS_PER_HOUR=8`(감쇠) · `HUNGER_PER_FEED=30`/`HAPPINESS_PER_FEED=10`(먹이) · `XP_PER_CHAT=15`·`BOND_PER_CHAT=6`·`HAPPINESS_PER_CHAT=8`·`HUNGER_PER_CHAT=2`·`XP_PER_LEVEL=50`(대화 성장).
+**`src/core/petState.ts`**: `HUNGER_PER_HOUR=10`/`HAPPINESS_PER_HOUR=8`(감쇠) · `HUNGER_PER_FEED=30`/`HAPPINESS_PER_FEED=10`(먹이).
 
 ## 7. 스프라이트 파이프라인
 
@@ -95,6 +94,5 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - **결정 7 의 UX 경계 2건은 해소됨**(결정 13·14). (A) perch 판정을 선정(`isValidRect`)과 체류(`canKeepPerch`)로 분리. (B) 하차 시 벽시계 쿨다운 제거, 재타깃은 `onGround` 게이트로 지면 도착 시 열림.
 - **남은 제약**: 요소 간 **공중 도약은 불가**. 팻은 지면까지 내려온 뒤 다음 요소로 걸어간다. 도약을 원하면 core 에 점프 행동을 추가해야 한다.
 - **상태를 바꾸는 기능엔 반드시 E2E 를 붙인다.** 낮잠 회복 버그(결정 10)가 이 규칙이 없어 통과됐다.
-- **`chattedAt` 은 아직 소비처가 없다.** 사이드패널이 대화 시 `chrome.storage.local` 에 쓰지만 content 는 읽지 않는다(`fedAt` 은 읽어서 eat 애니메이션을 튼다). 대화 전용 연출을 붙일 때 쓰라고 남겨둔 훅이며, 안 쓸 거면 지워도 된다.
-- **성장치는 사이드패널에만 보인다.** 레벨·친밀도가 팻의 외형·행동에 반영되지 않는다 — 다음 후보.
-- **의사결정·근거**는 `context-notes.md`(결정 1~15)에, 체크리스트는 `checklist.md`에 있음.
+- **대화 기반 성장(레벨·친밀도·XP·대화 횟수)은 2026-08-06 에 롤백됐다**(결정 16). 되살리려면 `git revert` 로 되돌린 커밋 `7419696` 을 다시 적용하면 된다.
+- **의사결정·근거**는 `context-notes.md`(결정 1~16)에, 체크리스트는 `checklist.md`에 있음.
