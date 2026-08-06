@@ -67,11 +67,13 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 ## 7. 스프라이트 파이프라인
 
 - 9프레임 순서(고정): `idle·walk1·walk2·fall·happy·hungry·want_play·sleep·eat`. 각 64×104px, 시트 576×104.
-- `scripts/make-sprite.mjs`가 원본 시트를 읽어 `src/assets/pet.png` 생성. 기능: 배경 투명화(불투명 소스면 무채색 flood-fill, 이미 투명이면 알파 그대로), 프레임 분리(9 균등/갭), **주 캐릭터 기준 크기·바닥 정렬**(장식 잘림 방지), **좌우 반전**(`MIRROR_X=true` — 소스가 왼쪽 보기라 오른쪽 보기로 뒤집음).
-- 현재 소스: `assets/frames/sprite_images_v8.png`. **새 아트 교체법**: `assets/frames/`에 넣고 make-sprite의 `SRC`만 바꿔 `node scripts/make-sprite.mjs` → `pet.png` 재생성 → 눈으로 확인 → `npm run check`.
-- 아트 규칙: 가로 한 줄 9칸·균일·라벨 없음·진짜 알파 투명. 오른쪽 보기로 그려주면 `MIRROR_X=false`로 바꾸면 됨.
+- `scripts/make-sprite.mjs`가 원본 시트를 읽어 캐릭터 시트를 생성. 기능: 배경 투명화(불투명 소스면 무채색 flood-fill, 이미 투명이면 알파 그대로), 프레임 분리(9 균등/갭), **주 캐릭터 기준 크기·바닥 정렬**(장식 잘림 방지), **좌우 반전**(캐릭터별 `mirrorX` 옵션).
+- 소스→시트 매핑은 make-sprite 의 `SHEETS` 배열에 있다. 현재 `sprite_images_v8.png`→`pet.png`(mirrorX **true**), `pet2_source.png`→`pet2.png`(mirrorX **false**). **새 아트 교체법**: `assets/frames/`에 넣고 `SHEETS` 에 한 줄 추가/수정 → `node scripts/make-sprite.mjs` → 눈으로 확인 → `npm run check`.
+- `mirrorX` 는 소스가 어느 쪽을 보는지에 따라 정한다. 판별법: walk 프레임을 `pet.png` 와 나란히 확대해 보고 **오른쪽을 보는 쪽**을 고른다.
+- 아트 규칙: 가로 한 줄 9칸·균일·라벨 없음·진짜 알파 투명. 해상도는 높을수록 좋다(축소는 깨끗하지만 확대는 뭉개진다).
 - **캐릭터 추가법**: ① 576×104 시트를 `src/assets/<id>.png` 로 넣고 ② `src/core/characters.ts` 의 `CHARACTERS` 에 `{id,name,sprite}` 추가 ③ `manifest.json` 의 `web_accessible_resources` 에 파일명 추가. 셋 중 하나라도 빠지면 `npm run validate` 가 잡는다. `build.mjs` 는 손댈 필요 없다.
-- **캐릭터마다 그려진 크기는 달라도 된다** — 셀 규격(64×104)과 프레임 순서만 지키면 된다. `pet2.png` 는 의도적으로 `pet.png` 절반 크기다. 단 **바닥 정렬**(내용 최하단이 y=103)은 맞춰야 지면에 뜨지 않는다.
+- **캐릭터마다 그려진 크기는 달라도 된다** — 셀 규격(64×104)과 프레임 순서만 지키면 된다. 바닥 정렬(내용 최하단 y=103)은 make-sprite 가 자동으로 맞춘다.
+- **폭이 병목이 될 수 있다.** make-sprite 는 주 캐릭터를 `TARGET_W=58`·`TARGET_H=100` 안에 맞추는데, 통통한 체형은 폭이 먼저 차서 높이가 100에 못 미친다. `pet2` 서 있는 프레임이 79~89px 인 이유다(`pet` 은 47~56px 폭이라 100 도달).
 
 ## 8. Git
 
@@ -80,7 +82,7 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - 기능 작업은 `fix/…`·`feat/…` 브랜치에서 하고, `npm run check` 그린 뒤 main에 ff 병합 → push 한다.
 - 커밋은 pathspec으로 chrome-pet 파일만 스코프. 커밋 메시지에 검증 결과 명시, 끝에 Co-Authored-By 트레일러.
 - **워크스페이스 정리 완료**(2026-08-06): `dist.zip` 삭제 + `.gitignore` 등록, `.bkit/`·`session-save.txt`(에이전트 툴 세션 상태) gitignore, `AGENTS.md`·`.agents/`·`.codex/` 커밋, `assets/frames/`의 미추적 아트 4개 커밋. `git status` 클린 상태를 유지한다.
-- `assets/frames/`엔 중간 아트가 v1~v8까지 쌓여 있고 `make-sprite.mjs`가 참조하는 건 **v8 하나뿐**이다. v8만 남기고 정리해도 되지만 되돌릴 수 없어 보류했다 — 판단은 사용자 몫.
+- `assets/frames/`엔 중간 아트가 v1~v8까지 쌓여 있고 `make-sprite.mjs`가 참조하는 건 **v8 과 pet2_source 둘뿐**이다. v8만 남기고 정리해도 되지만 되돌릴 수 없어 보류했다 — 판단은 사용자 몫.
 
 ## 9. 에이전트 하네스 (개발 방식)
 
@@ -100,5 +102,4 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - **남은 제약**: 요소 간 **공중 도약은 불가**. 팻은 지면까지 내려온 뒤 다음 요소로 걸어간다. 도약을 원하면 core 에 점프 행동을 추가해야 한다.
 - **상태를 바꾸는 기능엔 반드시 E2E 를 붙인다.** 낮잠 회복 버그(결정 10)가 이 규칙이 없어 통과됐다.
 - **대화 기반 성장(레벨·친밀도·XP·대화 횟수)은 2026-08-06 에 롤백됐다**(결정 16). 되살리려면 `git revert` 로 되돌린 커밋 `7419696` 을 다시 적용하면 된다.
-- **`pet2.png` 는 저해상도다.** 원본 고해상도 아트가 없어 이미 축소된 576×104 시트를 그대로 쓴다. 분홍이와 같은 크기로 키우려면 고해상도 원본을 받아 `make-sprite.mjs` 로 재생성해야 한다 — 지금 시트를 업스케일하면 뭉개진다.
-- **의사결정·근거**는 `context-notes.md`(결정 1~17)에, 체크리스트는 `checklist.md`에 있음.
+- **의사결정·근거**는 `context-notes.md`(결정 1~18)에, 체크리스트는 `checklist.md`에 있음.
