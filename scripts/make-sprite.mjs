@@ -10,7 +10,9 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const FRAME_W = 64;
 const FRAME_H = 104;
-const MIRROR_X = true; // 소스 아트가 왼쪽을 보고 있어, 코드 기본(오른쪽 보기)에 맞추려 수평 반전한다.
+// 소스 아트가 왼쪽을 보고 있으면 코드 기본(오른쪽 보기)에 맞추려 수평 반전한다.
+// 캐릭터마다 다를 수 있어 makeSprite 의 옵션으로 뺐다. 기본값은 기존 소스(v8) 기준 true.
+const MIRROR_X = true;
 const TARGET_W = 58; // 주 캐릭터가 셀에서 차지할 최대 폭
 const TARGET_H = 100; // 주 캐릭터가 셀에서 차지할 최대 높이
 const FRAMES = ['idle', 'walk1', 'walk2', 'fall', 'happy', 'hungry', 'want_play', 'sleep', 'eat'];
@@ -152,7 +154,7 @@ function downsample(src, box, dstW, dstH) {
   return out;
 }
 
-export async function makeSprite(srcPath, destPath) {
+export async function makeSprite(srcPath, destPath, { mirrorX = MIRROR_X } = {}) {
   const src = PNG.sync.read(await readFile(srcPath));
   if (!hasTransparentBackground(src)) keyBackground(src);
 
@@ -194,7 +196,7 @@ export async function makeSprite(srcPath, destPath) {
     const baseX = f * FRAME_W;
     for (let y = 0; y < fh; y++) {
       for (let x = 0; x < fw; x++) {
-        const dxp = baseX + left + (MIRROR_X ? fw - 1 - x : x);
+        const dxp = baseX + left + (mirrorX ? fw - 1 - x : x);
         const dyp = top + y;
         if (dxp < baseX || dxp >= baseX + FRAME_W || dyp < 0 || dyp >= FRAME_H) continue; // 셀 밖 클립
         const si = (y * fw + x) * 4;
@@ -213,7 +215,16 @@ export async function makeSprite(srcPath, destPath) {
   return { width: sheet.width, height: sheet.height, frames: FRAMES.length };
 }
 
-const SRC = resolve(root, 'assets/frames/sprite_images_v8.png');
-const DEST = resolve(root, 'src/assets/pet.png');
-const info = await makeSprite(SRC, DEST);
-console.log(`sprite ok → src/assets/pet.png (${info.width}x${info.height}, frames ${info.frames})`);
+// 캐릭터별 원본 → 게임용 시트. 캐릭터를 추가하면 여기에 한 줄 넣는다.
+// mirrorX 는 소스 아트가 어느 쪽을 보는지에 따라 정한다(코드 기본은 오른쪽 보기).
+const SHEETS = [
+  { src: 'assets/frames/sprite_images_v8.png', dest: 'src/assets/pet.png', mirrorX: true },
+  { src: 'assets/frames/pet2_source.png', dest: 'src/assets/pet2.png', mirrorX: false },
+];
+
+for (const sheet of SHEETS) {
+  const info = await makeSprite(resolve(root, sheet.src), resolve(root, sheet.dest), {
+    mirrorX: sheet.mirrorX,
+  });
+  console.log(`sprite ok → ${sheet.dest} (${info.width}x${info.height}, frames ${info.frames})`);
+}
