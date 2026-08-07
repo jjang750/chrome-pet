@@ -1,6 +1,9 @@
 // 캐릭터 선택 E2E — 사이드패널 썸네일 클릭 → storage 저장 → 열려 있는 content 오버레이 시트 교체 확인
 import { test, expect, type ConsoleMessage } from '@playwright/test';
 import { launchWithExtension, gotoLocalPage } from './harness';
+// 캐릭터가 늘어도 이 스펙이 깨지지 않도록 개수를 core 목록에서 파생시킨다.
+// characters.ts 는 chrome API 의존이 없는 순수 모듈이라 테스트에서 그대로 import 할 수 있다.
+import { CHARACTERS } from '../../src/core/characters';
 
 // 기본 캐릭터(pet)와 두 번째 캐릭터(pet2). core/characters.ts 의 id·sprite 미러링.
 const DEFAULT_SPRITE = 'pet.png';
@@ -58,7 +61,7 @@ test('사이드패널에서 캐릭터를 고르면 storage 에 저장되고 열�
 
     await panel.goto(`chrome-extension://${extId}/sidepanel.html`);
     const buttons = panel.locator('.char-btn');
-    await expect(buttons).toHaveCount(2);
+    await expect(buttons).toHaveCount(CHARACTERS.length);
 
     // 선택 전에는 기본 캐릭터가 눌린 상태로 표시된다.
     const secondBtn = panel.locator(`.char-btn[data-character-id="${SECOND_ID}"]`);

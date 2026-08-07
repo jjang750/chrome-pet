@@ -20,6 +20,7 @@ export interface Character {
 export const CHARACTERS: readonly Character[] = [
   { id: 'pet', name: '분홍 고양이', sprite: 'pet.png' },
   { id: 'pet2', name: '하늘 코끼리', sprite: 'pet2.png' },
+  { id: 'pet3', name: '푸들 우주인', sprite: 'pet3.png' },
 ];
 
 /** 선택값이 없거나 알 수 없을 때 쓰는 캐릭터 id. */
