@@ -4,16 +4,18 @@
 
 ## 1. 현재 상태 (한 줄)
 
-MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 배고픔·행복 UI + 캐릭터 선택. `npm run check` 그린(유닛 93 + E2E 13). GitHub: `jjang750/chrome-pet`.
+MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 배고픔·행복 UI + 캐릭터 선택. `npm run check` 그린(유닛 107 + E2E 14). GitHub: `jjang750/chrome-pet`.
 
 ## 2. 구현된 기능
 
 - **데스크톱 팻** — 모든 웹페이지 오버레이. 중력 낙하 → 바닥 배회. 9프레임 스프라이트 애니메이션.
-- **프레임 규칙** — 좌우로 움직이면(vel.x≠0) walk1↔walk2, 멈추면 상태별 액션. 우선순위: falling>held>eating>playing>walk>hungry>sleep>want_play>happy>idle.
+- **프레임 규칙** — 좌우로 움직이면(vel.x≠0) walk1↔walk2, 멈추면 상태별 액션. 우선순위: falling>held>eating>playing>walk>hungry>sleep>want_play>smile>idle.
 - **요소 안착(perch)** — 보이는 적당한 크기 요소 전반(div·카드·문단·목록·헤딩·버튼 등)으로 걸어가 올라앉음. 6초 체류 후 내려와 다른 요소로 이동. 거대 래퍼/안 보이는 요소 제외.
 - **드래그** — 마우스로 팻을 잡아(held) 끌고, 놓으면 낙하.
 - **먹이 주기** — 사이드패널 버튼 → `fedAt` 신호 → content가 2초 eat 애니메이션(배부른 팻도 반응).
-- **배고픔 알람** — `chrome.alarms` 1분 주기로 decay(시간 경과 시 배고픔↑·행복↓). **배고픔·행복을 바꾸는 경로는 decay(시간)·feed(먹이) 둘뿐이다** — 결정 10·16 참고.
+- **배고픔 알람** — `chrome.alarms` 1분 주기로 decay(시간 경과 시 배고픔↑·행복↓). **배고픔·행복을 바꾸는 경로는 decay(시간)·feed(먹이)·play(놀아주기) 셋뿐이다** — 결정 10·16·19 참고. 배고픔을 바꾸는 건 decay·feed 둘뿐이다.
+- **놀아주기** — 팻을 클릭하거나 끌었다 놓으면 행복도 +8. 3초 쿨다운이 있고, **행복도만** 바뀐다(배고픔 무관). 클릭도 pointerdown→pointerup 이라 드롭과 같은 경로(`endDrag`)로 처리된다.
+- **웃음 빈도** — 행복도가 높을수록 멈춤(idle) 때 자주 웃는다. `smilePeriod`: 90+ 는 멈출 때마다, 70+ 는 두 번에 한 번, 60+ 는 세 번에 한 번, 60 미만은 안 웃음. 배고픔·낮잠·칭얼이 우선.
 - **추가 애니메이션** — 주기적 낮잠(sleep, 10초 유지), 행복 낮으면 칭얼(want_play), 행복 높으면 happy. 낮잠은 **연출 전용**으로 상태 보상이 없다.
 - **마우스 놀이** — 마우스 30초 정지 + 커서가 뷰포트 안이면 커서로 올라가 놀기(playing, happy 프레임). 마우스 이동/커서 이탈 시 해제.
 - **사이드패널** — 아이콘 클릭으로 열림(`setPanelBehavior`). 배고픔·행복 게이지 바 + 숫자, 먹이 주기 버튼, 캐릭터 썸네일 선택, storage 변경 실시간 반영.
@@ -25,9 +27,9 @@ MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드�
 ```
 src/
 ├─ core/            # 순수 로직 (크롬 API 없음, vitest로 빠르게 검증)
-│   ├─ petState.ts     # 배고픔·행복 상태머신 (createPet, decay, feed)
+│   ├─ petState.ts     # 배고픔·행복 상태머신 (createPet, decay, feed, play)
 │   ├─ characters.ts   # 선택 가능한 캐릭터 목록 + id 해석 (CHARACTERS, resolveCharacter)
-│   └─ petBehavior.ts  # 물리·행동 상태머신 (step, spriteFrame) + 모든 튜닝 상수
+│   └─ petBehavior.ts  # 물리·행동 상태머신 (step, spriteFrame, smilePeriod) + 모든 튜닝 상수
 ├─ chrome/
 │   ├─ storage.ts     # chrome.storage 어댑터 (loadPet/savePet)
 │   └─ context.ts     # isExtensionContextValid — 죽은 확장 컨텍스트 판정
@@ -36,17 +38,17 @@ src/
 └─ sidepanel/         # 상태 게이지 + 먹이 버튼 + 캐릭터 썸네일 피커
 src/assets/ pet.png · pet2.png (캐릭터 시트, build 가 dist 로 전부 복사)
 scripts/  build.mjs · validate-manifest.mjs · make-sprite.mjs
-tests/e2e/ (13개) smoke·feed·alarm·overlay·drag·eat·character·context-invalidation·sleep-no-recovery
+tests/e2e/ (14개) smoke·feed·alarm·overlay·drag·eat·character·play·context-invalidation·sleep-no-recovery
            ·perch·perch-hop·perch-retarget·perch-scroll .spec.ts
 ```
 
-- **규칙**: `core/`엔 `chrome.*`·`Date.now()`·`Math.random()` 금지(eslint가 chrome 전역 차단). 시간·랜덤은 인자 주입. 위치는 페이지별 휘발성(메모리), 배고픔·행복(`pet`)과 캐릭터 선택(`character`)만 `chrome.storage.local`에 저장.
+- **규칙**: `core/`엔 `chrome.*`·`Date.now()`·`Math.random()` 금지(eslint가 chrome 전역 차단). 시간·랜덤은 인자 주입. 위치는 페이지별 휘발성(메모리), 배고픔·행복·마지막 놀아준 시각(`pet`)과 캐릭터 선택(`character`)만 `chrome.storage.local`에 저장.
 
 ## 4. 검증·빌드
 
 | 명령 | 역할 |
 |---|---|
-| `npm run check` | lint→typecheck→test(vitest 93)→validate→build→**test:e2e(13)**. **완료 게이트, 이거 통과가 곧 완료.** 약 3분(E2E 2.8분) |
+| `npm run check` | lint→typecheck→test(vitest 107)→validate→build→**test:e2e(14)**. **완료 게이트, 이거 통과가 곧 완료.** 약 3분(E2E 2.8분) |
 | `npm run build` | esbuild 번들 + `src/assets/*.png` 전부 복사 → `dist/`. **`dist/`는 매 빌드마다 통째로 지워진다** — 아트를 `dist/`에 두면 사라지니 `src/assets/`에 넣을 것 |
 | `npm run test:e2e` | Playwright (headed chromium 필요, 최초 `npx playwright install chromium`) |
 
@@ -62,18 +64,20 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 
 **`src/content/index.ts`**: `PERCH_MS=6000`(요소 체류) · `RETARGET_INTERVAL=4000` · `EAT_MS=2000` · `IDLE_MOUSE_MS=30000`(마우스 놀이) · `PLAY_LERP=0.15` · 후보 크기 필터(폭 40~400·높이 24~320).
 
-**`src/core/petState.ts`**: `HUNGER_PER_HOUR=10`/`HAPPINESS_PER_HOUR=8`(감쇠) · `HUNGER_PER_FEED=30`/`HAPPINESS_PER_FEED=10`(먹이).
+**`src/core/petState.ts`**: `HUNGER_PER_HOUR=10`/`HAPPINESS_PER_HOUR=8`(감쇠) · `HUNGER_PER_FEED=30`/`HAPPINESS_PER_FEED=10`(먹이) · `HAPPINESS_PER_PLAY=8`/`PLAY_COOLDOWN_MS=3000`(놀아주기).
+
+**`src/core/petBehavior.ts`** `smilePeriod`: 웃음 주기 임계값 90/70/60.
 
 ## 7. 스프라이트 파이프라인
 
 - 9프레임 순서(고정): `idle·walk1·walk2·fall·happy·hungry·want_play·sleep·eat`. 각 64×104px, 시트 576×104.
 - `scripts/make-sprite.mjs`가 원본 시트를 읽어 캐릭터 시트를 생성. 기능: 배경 투명화(불투명 소스면 무채색 flood-fill, 이미 투명이면 알파 그대로), 프레임 분리(9 균등/갭), **주 캐릭터 기준 크기·바닥 정렬**(장식 잘림 방지), **좌우 반전**(캐릭터별 `mirrorX` 옵션).
-- 소스→시트 매핑은 make-sprite 의 `SHEETS` 배열에 있다. 현재 `sprite_images_v8.png`→`pet.png`(mirrorX **true**), `pet2_source.png`→`pet2.png`(mirrorX **false**). **새 아트 교체법**: `assets/frames/`에 넣고 `SHEETS` 에 한 줄 추가/수정 → `node scripts/make-sprite.mjs` → 눈으로 확인 → `npm run check`.
+- 소스→시트 매핑은 make-sprite 의 `SHEETS` 배열에 있다. 현재 `sprite_images_v8.png`→`pet.png`(mirrorX **true**), `pet2_source_v2.png`→`pet2.png`(mirrorX **false**). **새 아트 교체법**: `assets/frames/`에 넣고 `SHEETS` 에 한 줄 추가/수정 → `node scripts/make-sprite.mjs` → 눈으로 확인 → `npm run check`.
 - `mirrorX` 는 소스가 어느 쪽을 보는지에 따라 정한다. 판별법: walk 프레임을 `pet.png` 와 나란히 확대해 보고 **오른쪽을 보는 쪽**을 고른다.
 - 아트 규칙: 가로 한 줄 9칸·균일·라벨 없음·진짜 알파 투명. 해상도는 높을수록 좋다(축소는 깨끗하지만 확대는 뭉개진다).
 - **캐릭터 추가법**: ① 576×104 시트를 `src/assets/<id>.png` 로 넣고 ② `src/core/characters.ts` 의 `CHARACTERS` 에 `{id,name,sprite}` 추가 ③ `manifest.json` 의 `web_accessible_resources` 에 파일명 추가. 셋 중 하나라도 빠지면 `npm run validate` 가 잡는다. `build.mjs` 는 손댈 필요 없다.
 - **캐릭터마다 그려진 크기는 달라도 된다** — 셀 규격(64×104)과 프레임 순서만 지키면 된다. 바닥 정렬(내용 최하단 y=103)은 make-sprite 가 자동으로 맞춘다.
-- **폭이 병목이 될 수 있다.** make-sprite 는 주 캐릭터를 `TARGET_W=58`·`TARGET_H=100` 안에 맞추는데, 통통한 체형은 폭이 먼저 차서 높이가 100에 못 미친다. `pet2` 서 있는 프레임이 79~89px 인 이유다(`pet` 은 47~56px 폭이라 100 도달).
+- **폭이 병목이 될 수 있다.** make-sprite 는 주 캐릭터를 `TARGET_W=58`·`TARGET_H=100` 안에 맞추는데, 통통한 체형은 폭이 먼저 차서 높이가 100에 못 미친다. `pet2` 서 있는 프레임이 79~96px 인 이유다(`pet` 은 47~56px 폭이라 100 도달).
 
 ## 8. Git
 
@@ -82,7 +86,7 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - 기능 작업은 `fix/…`·`feat/…` 브랜치에서 하고, `npm run check` 그린 뒤 main에 ff 병합 → push 한다.
 - 커밋은 pathspec으로 chrome-pet 파일만 스코프. 커밋 메시지에 검증 결과 명시, 끝에 Co-Authored-By 트레일러.
 - **워크스페이스 정리 완료**(2026-08-06): `dist.zip` 삭제 + `.gitignore` 등록, `.bkit/`·`session-save.txt`(에이전트 툴 세션 상태) gitignore, `AGENTS.md`·`.agents/`·`.codex/` 커밋, `assets/frames/`의 미추적 아트 4개 커밋. `git status` 클린 상태를 유지한다.
-- `assets/frames/`엔 중간 아트가 v1~v8까지 쌓여 있고 `make-sprite.mjs`가 참조하는 건 **v8 과 pet2_source 둘뿐**이다. v8만 남기고 정리해도 되지만 되돌릴 수 없어 보류했다 — 판단은 사용자 몫.
+- `assets/frames/`엔 중간 아트가 v1~v8까지 쌓여 있고 `make-sprite.mjs`가 참조하는 건 **v8 과 pet2_source_v2 둘뿐**이다. v8만 남기고 정리해도 되지만 되돌릴 수 없어 보류했다 — 판단은 사용자 몫.
 
 ## 9. 에이전트 하네스 (개발 방식)
 
@@ -102,4 +106,5 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - **남은 제약**: 요소 간 **공중 도약은 불가**. 팻은 지면까지 내려온 뒤 다음 요소로 걸어간다. 도약을 원하면 core 에 점프 행동을 추가해야 한다.
 - **상태를 바꾸는 기능엔 반드시 E2E 를 붙인다.** 낮잠 회복 버그(결정 10)가 이 규칙이 없어 통과됐다.
 - **대화 기반 성장(레벨·친밀도·XP·대화 횟수)은 2026-08-06 에 롤백됐다**(결정 16). 되살리려면 `git revert` 로 되돌린 커밋 `7419696` 을 다시 적용하면 된다.
-- **의사결정·근거**는 `context-notes.md`(결정 1~18)에, 체크리스트는 `checklist.md`에 있음.
+- **놀아주기 쿨다운은 두 겹이다.** core 의 `play()` 가 `lastPlayedAt`(storage)으로 막고, content 가 `await` **앞에서** 메모리 타임스탬프로 한 번 더 막는다. storage 만으로는 동시 클릭이 전부 "저장 전" 상태를 읽어 통과한다(read-modify-write 경합) — E2E 가 실제로 잡은 버그다.
+- **의사결정·근거**는 `context-notes.md`(결정 1~19)에, 체크리스트는 `checklist.md`에 있음.
