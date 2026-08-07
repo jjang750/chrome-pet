@@ -611,6 +611,56 @@ describe('spriteFrame', () => {
   });
 });
 
+describe('낙하 중에는 perch 로직이 y 를 스냅하지 않는다 (드롭 순간이동 버그)', () => {
+  // 재현: 팻이 요소로 걸어가는 중(perch 잡힘)에 잡아서 공중에 떨구면,
+  // 미정렬 분기가 pos.y 를 ground 로 즉시 되돌려 낙하 모션이 사라졌다.
+  const AIRBORNE_Y = 100;
+
+  function fallingWithPerch(): { body: PetBody; env: Env } {
+    const env = makeEnv(800, 600);
+    // 팻은 x=0 부근, perch 는 화면 오른쪽 → 가로 미정렬 상태.
+    env.perch = { top: 300, left: 600, right: 700 };
+    const body = bodyAt({ x: 0, y: AIRBORNE_Y }, { mode: 'falling', vel: { x: 0, y: 0 } });
+    return { body, env };
+  }
+
+  it('한 프레임 뒤에도 지면으로 순간이동하지 않는다', () => {
+    const { body, env } = fallingWithPerch();
+    const next = step(body, env, HEALTHY, 16);
+    expect(next.pos.y).toBeLessThan(env.ground);
+    expect(next.mode).toBe('falling');
+  });
+
+  it('중력으로 점진적으로 내려온다(속도가 붙는다)', () => {
+    const { body, env } = fallingWithPerch();
+    const a = step(body, env, HEALTHY, 100);
+    const b = step(a, env, HEALTHY, 100);
+    expect(a.pos.y).toBeGreaterThan(AIRBORNE_Y);
+    expect(b.pos.y).toBeGreaterThan(a.pos.y);
+    // 가속: 두 번째 구간 이동량이 첫 구간보다 크다.
+    expect(b.pos.y - a.pos.y).toBeGreaterThan(a.pos.y - AIRBORNE_Y);
+  });
+
+  it('지면에 닿은 뒤에는 다시 perch 를 향해 걷는다(기능은 유지)', () => {
+    const { env } = fallingWithPerch();
+    // 이미 지면에 있는 팻은 종전대로 perch 쪽으로 걸어야 한다.
+    const onGround = bodyAt({ x: 0, y: env.ground }, { mode: 'walking', vel: { x: 0, y: 0 } });
+    const next = step(onGround, env, HEALTHY, 100);
+    expect(next.mode).toBe('walking');
+    expect(next.pos.y).toBe(env.ground);
+    expect(next.vel.x).toBeGreaterThan(0); // perch 가 오른쪽이라 오른쪽으로
+  });
+
+  it('perch 위에 앉아 있는 동안은 종전대로 perch 를 추종한다', () => {
+    const env = makeEnv(800, 600);
+    env.perch = { top: 300, left: 200, right: 400 };
+    const perched = bodyAt({ x: 250, y: 300 - SPRITE_H }, { mode: 'perched' });
+    const next = step(perched, env, HEALTHY, 100);
+    expect(next.mode).toBe('perched');
+    expect(next.pos.y).toBe(300 - SPRITE_H);
+  });
+});
+
 describe('smilePeriod — 행복할수록 자주 웃는다', () => {
   it('행복도가 높을수록 주기가 짧다(0 은 안 웃음)', () => {
     expect(smilePeriod(100)).toBe(1);

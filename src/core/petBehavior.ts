@@ -104,7 +104,11 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
       };
     }
     // 그 외는 기존 A 동작(아래 낙하/걷기)로 흐른다.
-  } else {
+  } else if (body.mode !== 'falling') {
+    // 낙하 중(공중)엔 perch 로직을 태우지 않는다 — 아래 중력 코드로 흘려보낸다.
+    // 태우면 미정렬 분기가 pos.y 를 ground 로 스냅해 낙하 모션이 사라진다:
+    // 요소로 걸어가는 중(perch 잡힘)에 잡아서 떨구면 "모션 없이 팍 떨어지는" 버그가 났다.
+    // 설계상 팻은 지면까지 내려온 뒤 다음 요소로 걸어간다(결정 14) — 이 게이트가 그 규칙을 지킨다.
     const perchTopY = perch.top - SPRITE_H;
     const minX = perch.left;
     const maxX = Math.max(perch.left, perch.right - SPRITE_W);
