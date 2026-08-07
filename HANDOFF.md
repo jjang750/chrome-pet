@@ -4,7 +4,7 @@
 
 ## 1. 현재 상태 (한 줄)
 
-MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 배고픔·행복 UI + 캐릭터 선택. `npm run check` 그린(유닛 107 + E2E 14). GitHub: `jjang750/chrome-pet`.
+MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 배고픔·행복 UI + 캐릭터 선택. `npm run check` 그린(유닛 111 + E2E 15). GitHub: `jjang750/chrome-pet`.
 
 ## 2. 구현된 기능
 
@@ -38,7 +38,7 @@ src/
 └─ sidepanel/         # 상태 게이지 + 먹이 버튼 + 캐릭터 썸네일 피커
 src/assets/ pet.png · pet2.png · pet3.png (캐릭터 시트, build 가 dist 로 전부 복사)
 scripts/  build.mjs · validate-manifest.mjs · make-sprite.mjs
-tests/e2e/ (14개) smoke·feed·alarm·overlay·drag·eat·character·play·context-invalidation·sleep-no-recovery
+tests/e2e/ (15개) smoke·feed·alarm·overlay·drag·drag-drop-fall·eat·character·play·context-invalidation·sleep-no-recovery
            ·perch·perch-hop·perch-retarget·perch-scroll .spec.ts
 ```
 
@@ -48,7 +48,7 @@ tests/e2e/ (14개) smoke·feed·alarm·overlay·drag·eat·character·play·cont
 
 | 명령 | 역할 |
 |---|---|
-| `npm run check` | lint→typecheck→test(vitest 107)→validate→build→**test:e2e(14)**. **완료 게이트, 이거 통과가 곧 완료.** 약 3분(E2E 2.8분) |
+| `npm run check` | lint→typecheck→test(vitest 111)→validate→build→**test:e2e(15)**. **완료 게이트, 이거 통과가 곧 완료.** 약 3분(E2E 2.8분) |
 | `npm run build` | esbuild 번들 + `src/assets/*.png` 전부 복사 → `dist/`. **`dist/`는 매 빌드마다 통째로 지워진다** — 아트를 `dist/`에 두면 사라지니 `src/assets/`에 넣을 것 |
 | `npm run test:e2e` | Playwright (headed chromium 필요, 최초 `npx playwright install chromium`) |
 
@@ -103,6 +103,7 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - **E2E 타이밍**: WALK_SPEED 감소로 perch류 스펙이 느려 timeout을 넉넉히 뒀다(perch.spec 60s). 아주 느린 환경에선 flaky 가능.
 - **좁은 요소**: 스프라이트보다 좁은 요소엔 중앙에 걸터앉음(진동 버그는 수정됨). 원치 않으면 content 후보 최소 폭을 64+로 올리면 됨.
 - **결정 7 의 UX 경계 2건은 해소됨**(결정 13·14). (A) perch 판정을 선정(`isValidRect`)과 체류(`canKeepPerch`)로 분리. (B) 하차 시 벽시계 쿨다운 제거, 재타깃은 `onGround` 게이트로 지면 도착 시 열림.
+- **낙하 중엔 perch 로직을 태우지 않는다**(결정 22). `step` 의 perch 블록은 `body.mode !== 'falling'` 일 때만 돈다. 이 게이트가 없으면 미정렬 분기가 `y` 를 지면으로 스냅해 드롭 시 낙하 모션이 사라진다.
 - **남은 제약**: 요소 간 **공중 도약은 불가**. 팻은 지면까지 내려온 뒤 다음 요소로 걸어간다. 도약을 원하면 core 에 점프 행동을 추가해야 한다.
 - **상태를 바꾸는 기능엔 반드시 E2E 를 붙인다.** 낮잠 회복 버그(결정 10)가 이 규칙이 없어 통과됐다.
 - **대화 기반 성장(레벨·친밀도·XP·대화 횟수)은 2026-08-06 에 롤백됐다**(결정 16). 되살리려면 `git revert` 로 되돌린 커밋 `7419696` 을 다시 적용하면 된다.
