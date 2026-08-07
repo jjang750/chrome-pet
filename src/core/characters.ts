@@ -22,6 +22,8 @@ export const CHARACTERS: readonly Character[] = [
   { id: 'pet2', name: '하늘 코끼리', sprite: 'pet2.png' },
   { id: 'pet3', name: '푸들 우주인', sprite: 'pet3.png' },
   { id: 'pet4', name: '하양 유령', sprite: 'pet4.png' },
+  { id: 'pet5', name: '까만 앙마', sprite: 'pet5.png' },
+  { id: 'pet6', name: '깡총 토끼', sprite: 'pet6.png' },
 ];
 
 /** 선택값이 없거나 알 수 없을 때 쓰는 캐릭터 id. */

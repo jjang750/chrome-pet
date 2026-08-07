@@ -222,6 +222,8 @@ const SHEETS = [
   { src: 'assets/frames/pet2_source_v2.png', dest: 'src/assets/pet2.png', mirrorX: false },
   { src: 'assets/frames/pet3_source.png', dest: 'src/assets/pet3.png', mirrorX: false },
   { src: 'assets/frames/pet4_source.png', dest: 'src/assets/pet4.png', mirrorX: false },
+  { src: 'assets/frames/pet5_source.png', dest: 'src/assets/pet5.png', mirrorX: false },
+  { src: 'assets/frames/pet6_source.png', dest: 'src/assets/pet6.png', mirrorX: false },
 ];
 
 for (const sheet of SHEETS) {
