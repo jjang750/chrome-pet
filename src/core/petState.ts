@@ -8,6 +8,11 @@ export interface PetState {
   happiness: number;
   /** 마지막으로 상태가 갱신된 시각 (epoch ms) */
   lastUpdated: number;
+  /**
+   * 마지막으로 놀아준 시각 (epoch ms). 연타로 행복도를 채우는 것을 막는 쿨다운 기준.
+   * 기능 추가 전에 저장된 팻엔 없으므로 optional — 없으면 곧바로 놀 수 있다.
+   */
+  lastPlayedAt?: number;
 }
 
 /** 시간당 배고픔 증가량 */
@@ -35,6 +40,32 @@ export function feed(state: PetState): PetState {
     hunger: clamp(state.hunger - HUNGER_PER_FEED),
     happiness: clamp(state.happiness + HAPPINESS_PER_FEED),
     lastUpdated: state.lastUpdated,
+  };
+}
+
+/** 놀아줄 때 오르는 행복도. */
+export const HAPPINESS_PER_PLAY = 8;
+
+/**
+ * 놀아주기 쿨다운 (ms). 이 안에 다시 놀면 무시된다.
+ * 없으면 팻을 연타하는 것만으로 행복도가 즉시 100 이 돼 게이지가 의미를 잃는다.
+ */
+export const PLAY_COOLDOWN_MS = 3000;
+
+/**
+ * 놀아주기(클릭·드래그 후 놓기). 행복도만 올리고 배고픔·lastUpdated 는 건드리지 않는다.
+ * 쿨다운 중이면 **받은 객체를 그대로 반환**해, 호출부가 참조 비교로 "변화 없음"을 알 수 있다.
+ * now 를 주입받아 테스트 재현성을 보장한다.
+ */
+export function play(state: PetState, now: number): PetState {
+  const elapsed = now - (state.lastPlayedAt ?? -Infinity);
+  // 시계 역행(elapsed < 0)은 쿨다운으로 치지 않는다. 그러지 않으면 시계가 앞섰다 돌아온 뒤
+  // 팻이 영영 반응하지 않는다.
+  if (elapsed >= 0 && elapsed < PLAY_COOLDOWN_MS) return state;
+  return {
+    ...state,
+    happiness: clamp(state.happiness + HAPPINESS_PER_PLAY),
+    lastPlayedAt: now,
   };
 }
 

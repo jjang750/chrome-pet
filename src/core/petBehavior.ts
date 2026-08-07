@@ -269,6 +269,17 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
 }
 
 /**
+ * 행복도에 따라 "몇 번의 멈춤마다 한 번 웃는가"(주기)를 돌려준다. 1이면 멈출 때마다, 0이면 안 웃음.
+ * 행복도가 오를수록 주기가 짧아지기만 한다(단조) — "더 행복한데 덜 웃는" 구간이 없어야 한다.
+ */
+export function smilePeriod(happiness: number): number {
+  if (happiness >= 90) return 1;
+  if (happiness >= 70) return 2;
+  if (happiness >= 60) return 3;
+  return 0;
+}
+
+/**
  * 모드·mood 로 스프라이트 프레임 키를 반환한다. content 가 이 키로 프레임을 고른다.
  * 프레임 키 후보: 'idle'|'walk1'|'walk2'|'fall'|'happy'|'hungry'|'want_play'|'sleep'|'eat'
  * 우선순위(위→아래 첫 매치):
@@ -280,7 +291,7 @@ export function step(body: PetBody, env: Env, mood: Mood, dtMs: number): PetBody
  *   6) hunger>=70 → 'hungry'   (정지 상태에서 배고픔 최우선)
  *   7) sleeping → 'sleep'
  *   8) happiness<=30 → 'want_play'
- *   9) happiness>=90 → 'happy'
+ *   9) smilePeriod(happiness) 주기에 걸리면 → 'happy' (행복할수록 자주)
  *   10) 그 외 → 'idle'
  * 즉 걷기 판정은 mode 가 아니라 vel.x 로 한다. perched 순찰처럼 mode 가 walking 이 아니어도
  * 좌우로 움직이면(vel.x≠0) walk 프레임을 낸다("움직이는데 idle 표정" 버그 방지).
@@ -304,6 +315,8 @@ export function spriteFrame(body: PetBody, mood: Mood): string {
   if (mood.hunger >= 70) return 'hungry';
   if (body.mode === 'sleeping') return 'sleep';
   if (mood.happiness <= 30) return 'want_play';
-  if (mood.happiness >= 90) return 'happy';
+  // 행복할수록 잦은 주기로 웃는다. clock 기반이라 결정적(같은 입력 → 같은 프레임).
+  const period = smilePeriod(mood.happiness);
+  if (period > 0 && Math.floor(body.clock / (WALK_MS + IDLE_MS)) % period === 0) return 'happy';
   return 'idle';
 }

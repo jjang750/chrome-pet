@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest';
 import {
   step,
   spriteFrame,
+  smilePeriod,
   SPRITE_W,
   SPRITE_H,
   G,
@@ -607,6 +608,68 @@ describe('spriteFrame', () => {
   it('멈췄고 배 안 고프고 행복도 낮으면 idle', () => {
     const body = bodyAt({ x: 0, y: 0 }, { mode: 'idle' });
     expect(spriteFrame(body, { hunger: 0, happiness: 50 })).toBe('idle');
+  });
+});
+
+describe('smilePeriod — 행복할수록 자주 웃는다', () => {
+  it('행복도가 높을수록 주기가 짧다(0 은 안 웃음)', () => {
+    expect(smilePeriod(100)).toBe(1);
+    expect(smilePeriod(90)).toBe(1);
+    expect(smilePeriod(70)).toBe(2);
+    expect(smilePeriod(60)).toBe(3);
+    expect(smilePeriod(50)).toBe(0);
+    expect(smilePeriod(0)).toBe(0);
+  });
+
+  it('행복도가 오를수록 주기가 짧아지기만 한다(역전 없음)', () => {
+    // 단조성이 깨지면 "더 행복한데 덜 웃는" 구간이 생긴다.
+    // 0(안 웃음)은 무한대 주기로 환산해 비교한다.
+    const asPeriod = (h: number): number => smilePeriod(h) || Infinity;
+    for (let h = 1; h <= 100; h++) {
+      expect(asPeriod(h)).toBeLessThanOrEqual(asPeriod(h - 1));
+    }
+  });
+});
+
+describe('spriteFrame — 웃음 빈도', () => {
+  const CYCLE = WALK_MS + IDLE_MS;
+  const idleAt = (clock: number): PetBody => bodyAt({ x: 0, y: 0 }, { mode: 'idle', clock });
+
+  it('행복도 100 이면 어느 주기에 멈춰도 웃는다', () => {
+    for (let c = 0; c < 6; c++) {
+      expect(spriteFrame(idleAt(c * CYCLE + 10), { hunger: 0, happiness: 100 })).toBe('happy');
+    }
+  });
+
+  it('행복도 70 이면 두 주기에 한 번 웃는다', () => {
+    const frames = [0, 1, 2, 3].map((c) =>
+      spriteFrame(idleAt(c * CYCLE + 10), { hunger: 0, happiness: 70 }),
+    );
+    expect(frames).toEqual(['happy', 'idle', 'happy', 'idle']);
+  });
+
+  it('행복도 60 이면 세 주기에 한 번 웃는다', () => {
+    const frames = [0, 1, 2, 3, 4, 5].map((c) =>
+      spriteFrame(idleAt(c * CYCLE + 10), { hunger: 0, happiness: 60 }),
+    );
+    expect(frames).toEqual(['happy', 'idle', 'idle', 'happy', 'idle', 'idle']);
+  });
+
+  it('행복도가 높을수록 같은 구간에서 더 많이 웃는다', () => {
+    const count = (happiness: number): number =>
+      Array.from({ length: 12 }, (_, c) =>
+        spriteFrame(idleAt(c * CYCLE + 10), { hunger: 0, happiness }),
+      ).filter((f) => f === 'happy').length;
+    expect(count(100)).toBeGreaterThan(count(70));
+    expect(count(70)).toBeGreaterThan(count(60));
+    expect(count(60)).toBeGreaterThan(count(50));
+  });
+
+  it('웃음 빈도보다 배고픔·낮잠·칭얼이 먼저다', () => {
+    // 행복도가 높아도 배고프면 hungry 가 이긴다(기존 우선순위 유지).
+    expect(spriteFrame(idleAt(0), { hunger: 90, happiness: 100 })).toBe('hungry');
+    const sleeping = bodyAt({ x: 0, y: 0 }, { mode: 'sleeping', clock: 0 });
+    expect(spriteFrame(sleeping, { hunger: 0, happiness: 100 })).toBe('sleep');
   });
 
   it('걷기는 pos.x 기반으로 walk1/walk2 를 번갈아 낸다(WALK_STRIDE 기준, 결정적)', () => {

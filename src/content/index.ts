@@ -18,8 +18,8 @@ window.Notification = ProxiedNotification as unknown as typeof Notification;
 import { step, spriteFrame, SPRITE_W, SPRITE_H } from '../core/petBehavior';
 import { resolveCharacter } from '../core/characters';
 import type { PetBody, Env, Mood } from '../core/petBehavior';
-import { createPet } from '../core/petState';
-import { loadPet } from '../chrome/storage';
+import { createPet, decay, play, PLAY_COOLDOWN_MS } from '../core/petState';
+import { loadPet, savePet } from '../chrome/storage';
 import { isExtensionContextValid } from '../chrome/context';
 
 // spriteFrame 이 반환하는 프레임 키 → 시트 내 인덱스 (pet.png 는 이 순서로 9프레임).
@@ -461,11 +461,46 @@ function startPetOverlay(): void {
     body.mode = 'held'; // held 유지(rAF 의 step 이 identity 라 pos 보존).
   });
 
+  /**
+   * 놀아주기 — 팻을 클릭하거나 끌었다 놓으면 행복도가 오른다.
+   * 클릭도 pointerdown→pointerup 이라 endDrag 를 거치므로 두 경우가 한 경로로 처리된다.
+   * 연타 방지 쿨다운은 core 의 play() 안에 있고, lastPlayedAt 이 storage 에 있어 탭이 여러 개여도 공유된다.
+   */
+  // 이 탭에서 마지막으로 놀아주기를 시작한 시각. storage 쿨다운만으로는 연타를 막지 못한다:
+  // 클릭 3번이 거의 동시에 loadPet() 을 await 하면 셋 다 "저장 전" 상태를 읽어 전부 통과한다
+  // (read-modify-write 경합). await 앞에서 동기적으로 끊어야 한다.
+  let lastPlayAttempt = -Infinity;
+
+  function playWithPet(): void {
+    if (!isExtensionContextValid()) return;
+    const startedAt = Date.now();
+    // 시계 역행(음수 경과)은 쿨다운으로 치지 않는다 — core 의 play() 와 같은 규칙.
+    const sinceLast = startedAt - lastPlayAttempt;
+    if (sinceLast >= 0 && sinceLast < PLAY_COOLDOWN_MS) return;
+    lastPlayAttempt = startedAt;
+    void (async () => {
+      try {
+        const now = Date.now();
+        // 상태의 단일 진실은 storage — 매번 새로 읽는다(메모리 mood 에 의존하지 않는다).
+        const current = (await loadPet()) ?? createPet(now);
+        // 놀기 전 시계 최신화로 감쇠 누락 방지.
+        const decayed = decay(current, now);
+        const next = play(decayed, now);
+        // 쿨다운 중이면 play 가 같은 객체를 돌려준다 → 저장 생략(불필요한 onChanged 발화도 막는다).
+        if (next === decayed) return;
+        await savePet(next);
+      } catch (err) {
+        console.error('[pet] 놀아주기 실패', err);
+      }
+    })();
+  }
+
   function endDrag(e: PointerEvent): void {
     if (!dragging) return;
     dragging = false;
     body.mode = 'falling';
     body.vel = { x: 0, y: 0 };
+    playWithPet();
     try {
       el.releasePointerCapture(e.pointerId);
     } catch {
