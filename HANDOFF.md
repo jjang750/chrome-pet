@@ -4,7 +4,7 @@
 
 ## 1. 현재 상태 (한 줄)
 
-MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 배고픔·행복 UI + 캐릭터 선택(4종) + 놀아주기. `npm run check` 그린(유닛 111 + E2E 15). GitHub: `jjang750/chrome-pet`.
+MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드패널 배고픔·행복 UI + 캐릭터 선택(6종) + 놀아주기. `npm run check` 그린(유닛 111 + E2E 15). GitHub: `jjang750/chrome-pet`.
 
 > ⚠️ **`origin/main` 보다 로컬이 9커밋 앞서 있다(미푸시).** 아래 11장 참고.
 
@@ -21,7 +21,7 @@ MV3 크롬 확장. 웹페이지 위 데스크톱 팻(오버레이) + 사이드�
 - **추가 애니메이션** — 주기적 낮잠(sleep, 10초 유지), 행복 낮으면 칭얼(want_play), 행복 높으면 happy. 낮잠은 **연출 전용**으로 상태 보상이 없다.
 - **마우스 놀이** — 마우스 30초 정지 + 커서가 뷰포트 안이면 커서로 올라가 놀기(playing, happy 프레임). 마우스 이동/커서 이탈 시 해제.
 - **사이드패널** — 아이콘 클릭으로 열림(`setPanelBehavior`). 배고픔·행복 게이지 바 + 숫자, 먹이 주기 버튼, 캐릭터 썸네일 선택, storage 변경 실시간 반영.
-- **캐릭터 선택(4종: 분홍 고양이·하늘 코끼리·푸들 우주인·하양 유령)** — 사이드패널 썸네일(각 시트의 idle 프레임)을 클릭하면 `character` 키에 id 가 저장되고, 열려 있는 모든 페이지의 오버레이가 새로고침 없이 시트를 갈아낀다. 위치·상태는 그대로 이어진다. 모르는 id 는 기본 캐릭터로 폴백.
+- **캐릭터 선택(6종: 분홍 고양이·하늘 코끼리·푸들 우주인·하양 유령·까만 앙마·깡총 토끼)** — 사이드패널 썸네일(각 시트의 idle 프레임)을 클릭하면 `character` 키에 id 가 저장되고, 열려 있는 모든 페이지의 오버레이가 새로고침 없이 시트를 갈아낀다. 위치·상태는 그대로 이어진다. 모르는 id 는 기본 캐릭터로 폴백.
 - **컨텍스트 무효화 자기 정리** — 확장 리로드/업데이트로 content script 컨텍스트가 죽으면 rAF 루프를 멈추고 오버레이를 제거한다(`isExtensionContextValid`). 리로드 후 유령 팻과 `Extension context invalidated` 에러 스팸을 끊는다.
 
 ## 3. 아키텍처 (core/chrome 분리)
@@ -38,7 +38,7 @@ src/
 ├─ background/index.ts# service worker (알람 생성·decay, setPanelBehavior, 전역 에러 → __errors)
 ├─ content/index.ts   # 오버레이 rAF 렌더 + 요소 타깃팅 + 드래그·먹이·놀이 트리거 + 알림 프록시 + 컨텍스트 정리
 └─ sidepanel/         # 상태 게이지 + 먹이 버튼 + 캐릭터 썸네일 피커
-src/assets/ pet.png · pet2.png · pet3.png · pet4.png (캐릭터 시트, build 가 dist 로 전부 복사)
+src/assets/ pet.png · pet2.png … pet6.png (캐릭터 시트 6종, build 가 dist 로 전부 복사)
 scripts/  build.mjs · validate-manifest.mjs · make-sprite.mjs
 tests/e2e/ (15개) smoke·feed·alarm·overlay·drag·drag-drop-fall·eat·character·play·context-invalidation·sleep-no-recovery
            ·perch·perch-hop·perch-retarget·perch-scroll .spec.ts
@@ -74,7 +74,7 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 
 - 9프레임 순서(고정): `idle·walk1·walk2·fall·happy·hungry·want_play·sleep·eat`. 각 64×104px, 시트 576×104.
 - `scripts/make-sprite.mjs`가 원본 시트를 읽어 캐릭터 시트를 생성. 기능: 배경 투명화(불투명 소스면 무채색 flood-fill, 이미 투명이면 알파 그대로), 프레임 분리(9 균등/갭), **주 캐릭터 기준 크기·바닥 정렬**(장식 잘림 방지), **좌우 반전**(캐릭터별 `mirrorX` 옵션).
-- 소스→시트 매핑은 make-sprite 의 `SHEETS` 배열에 있다. 현재 `sprite_images_v8.png`→`pet.png`(mirrorX **true**), `pet2_source_v2.png`→`pet2.png`, `pet3_source.png`→`pet3.png`, `pet4_source.png`→`pet4.png`(셋 다 mirrorX **false**). **새 아트 교체법**: `assets/frames/`에 넣고 `SHEETS` 에 한 줄 추가/수정 → `node scripts/make-sprite.mjs` → 눈으로 확인 → `npm run check`.
+- 소스→시트 매핑은 make-sprite 의 `SHEETS` 배열에 있다. 현재 `sprite_images_v8.png`→`pet.png`(mirrorX **true**), `pet2_source_v2.png`→`pet2.png`, `pet3_source.png`~`pet6_source.png`→`pet3.png`~`pet6.png`(pet2~pet6 전부 mirrorX **false**). **새 아트 교체법**: `assets/frames/`에 넣고 `SHEETS` 에 한 줄 추가/수정 → `node scripts/make-sprite.mjs` → 눈으로 확인 → `npm run check`.
 - `mirrorX` 는 소스가 어느 쪽을 보는지에 따라 정한다. 판별법: walk 프레임을 `pet.png` 와 나란히 확대해 보고 **오른쪽을 보는 쪽**을 고른다.
 - 아트 규칙: 가로 한 줄 9칸·균일·라벨 없음·진짜 알파 투명. 해상도는 높을수록 좋다(축소는 깨끗하지만 확대는 뭉개진다).
 - **캐릭터 추가법**: ① 고해상도 원본을 `assets/frames/` 에 넣고 make-sprite 의 `SHEETS` 에 한 줄 추가 → `node scripts/make-sprite.mjs` ② `src/core/characters.ts` 의 `CHARACTERS` 에 `{id,name,sprite}` 추가 ③ `manifest.json` 의 `web_accessible_resources` 에 파일명 추가. ②③ 중 하나라도 빠지면 `npm run validate` 가 잡는다. `build.mjs` 와 E2E 는 손댈 필요 없다(둘 다 목록에서 파생).
@@ -88,7 +88,7 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - 기능 작업은 `fix/…`·`feat/…` 브랜치에서 하고, `npm run check` 그린 뒤 main에 ff 병합 → push 한다.
 - 커밋은 pathspec으로 chrome-pet 파일만 스코프. 커밋 메시지에 검증 결과 명시, 끝에 Co-Authored-By 트레일러.
 - **워크스페이스 정리 완료**(2026-08-06): `dist.zip` 삭제 + `.gitignore` 등록, `.bkit/`·`session-save.txt`(에이전트 툴 세션 상태) gitignore, `AGENTS.md`·`.agents/`·`.codex/` 커밋, `assets/frames/`의 미추적 아트 4개 커밋. `git status` 클린 상태를 유지한다.
-- `assets/frames/`엔 중간 아트가 v1~v8까지 쌓여 있고 `make-sprite.mjs`가 참조하는 건 **v8 · pet2_source_v2 · pet3_source · pet4_source 넷뿐**이다. v8만 남기고 정리해도 되지만 되돌릴 수 없어 보류했다 — 판단은 사용자 몫.
+- `assets/frames/`엔 중간 아트가 v1~v8까지 쌓여 있고 `make-sprite.mjs`가 참조하는 건 **v8 과 pet2_source_v2 · pet3~pet6_source 여섯뿐**이다. v8만 남기고 정리해도 되지만 되돌릴 수 없어 보류했다 — 판단은 사용자 몫.
 
 ## 9. 에이전트 하네스 (개발 방식)
 
@@ -111,7 +111,7 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 - **상태를 바꾸는 기능엔 반드시 E2E 를 붙인다.** 낮잠 회복 버그(결정 10)가 이 규칙이 없어 통과됐다.
 - **대화 기반 성장(레벨·친밀도·XP·대화 횟수)은 2026-08-06 에 롤백됐다**(결정 16). 되살리려면 `git revert` 로 되돌린 커밋 `7419696` 을 다시 적용하면 된다.
 - **놀아주기 쿨다운은 두 겹이다.** core 의 `play()` 가 `lastPlayedAt`(storage)으로 막고, content 가 `await` **앞에서** 메모리 타임스탬프로 한 번 더 막는다. storage 만으로는 동시 클릭이 전부 "저장 전" 상태를 읽어 통과한다(read-modify-write 경합) — E2E 가 실제로 잡은 버그다.
-- **의사결정·근거**는 `context-notes.md`(결정 1~23)에, 체크리스트는 `checklist.md`에 있음.
+- **의사결정·근거**는 `context-notes.md`(결정 1~24)에, 체크리스트는 `checklist.md`에 있음.
 
 ## 11. 인계 시점 미결 사항 (2026-08-07)
 
@@ -133,20 +133,11 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 
 올리려면 `git push origin main`. 되돌릴 이유는 없다 — 전부 게이트 통과분이다.
 
-### 11.2 pet5·pet6 추가 작업 — **중단 상태**
+### 11.2 pet5·pet6 추가 작업 — ✅ 완료 (2026-08-07)
 
-사용자가 "pet5 까만앙마 / pet6 깡총토끼" 추가를 요청했으나 **원본 파일을 특정하지 못해 멈췄다.**
-
-- 프로젝트 루트에서 `pet5.png`(해골 옷 아기)·`pet6.png`(토끼 옷 아기)를 발견해
-  `assets/frames/pet5_source.png` · `pet6_source.png` 로 **옮겨 두었다(미커밋·미등록).**
-- 그런데 사용자가 **"그 파일이 아냐. chrome-pet 폴더에 넣어놨어"** 라고 정정했다.
-  즉 위 두 파일은 의도한 아트가 아닐 가능성이 높다.
-- 다른 `chrome-pet` 폴더를 찾으려 했으나 탐색이 거부돼 확인하지 못했다.
-
-**다음 세션이 할 일**: 먼저 사용자에게 **원본 파일의 정확한 경로**를 묻는다.
-확인되면 아래 7장 "캐릭터 추가법" 3단계만 반복하면 된다(파이프라인은 이미 정비돼 있어 기계적이다).
-`assets/frames/pet5_source.png`·`pet6_source.png` 는 잘못 옮긴 것이면 지우거나 루트로 되돌리면 된다
-(원래 이름: 프로젝트 루트의 `pet5.png`·`pet6.png`).
+프로젝트 루트에 있던 `pet5.png`·`pet6.png` 를 `assets/frames/pet5_source.png`·`pet6_source.png` 로
+옮겨 정식 등록했다. 사용자가 "그 파일이 아니다" 라고 했다가 재확인 후 **이 두 파일로 확정**했다.
+`pet5` = 까만 앙마(해골 무늬 검정 옷), `pet6` = 깡총 토끼. 결정 24 참고.
 
 ### 11.3 "빌드했는데 크롬에 적용이 안 된다" — 원인 미확인
 
