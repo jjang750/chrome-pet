@@ -223,7 +223,9 @@ const SHEETS = [
   { src: 'assets/frames/pet3_source.png', dest: 'src/assets/pet3.png', mirrorX: false },
   { src: 'assets/frames/pet4_source.png', dest: 'src/assets/pet4.png', mirrorX: false },
   { src: 'assets/frames/pet5_source.png', dest: 'src/assets/pet5.png', mirrorX: false },
-  { src: 'assets/frames/pet6_source.png', dest: 'src/assets/pet6.png', mirrorX: false },
+  // pet6 은 정면 포즈라 정지 화면으로는 방향을 못 가렸는데, 실제 걷는 모션에서 좌우가 뒤집혀 보였다.
+  // 정면 스프라이트도 비대칭도가 충분하면(측정 94.2) mirrorX 가 체감된다 — 판정은 모션으로 한다.
+  { src: 'assets/frames/pet6_source.png', dest: 'src/assets/pet6.png', mirrorX: true },
 ];
 
 for (const sheet of SHEETS) {
