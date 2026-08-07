@@ -72,8 +72,9 @@ E2E는 2026-08-02에 `check` 안으로 편입됐다(결정 11). 게이트가 느
 
 - 9프레임 순서(고정): `idle·walk1·walk2·fall·happy·hungry·want_play·sleep·eat`. 각 64×104px, 시트 576×104.
 - `scripts/make-sprite.mjs`가 원본 시트를 읽어 캐릭터 시트를 생성. 기능: 배경 투명화(불투명 소스면 무채색 flood-fill, 이미 투명이면 알파 그대로), 프레임 분리(9 균등/갭), **주 캐릭터 기준 크기·바닥 정렬**(장식 잘림 방지), **좌우 반전**(캐릭터별 `mirrorX` 옵션).
-- 소스→시트 매핑은 make-sprite 의 `SHEETS` 배열에 있다. 현재 `sprite_images_v8.png`→`pet.png`(mirrorX **true**), `pet2_source_v2.png`→`pet2.png`, `pet3_source.png`~`pet6_source.png`→`pet3.png`~`pet6.png`(pet2~pet6 전부 mirrorX **false**). **새 아트 교체법**: `assets/frames/`에 넣고 `SHEETS` 에 한 줄 추가/수정 → `node scripts/make-sprite.mjs` → 눈으로 확인 → `npm run check`.
+- 소스→시트 매핑은 make-sprite 의 `SHEETS` 배열에 있다. 현재 `sprite_images_v8.png`→`pet.png`(mirrorX **true**), `pet2_source_v2.png`→`pet2.png`, `pet3_source.png`~`pet6_source.png`→`pet3.png`~`pet6.png`(pet2~pet5 는 mirrorX **false**, **pet6 만 true**). **새 아트 교체법**: `assets/frames/`에 넣고 `SHEETS` 에 한 줄 추가/수정 → `node scripts/make-sprite.mjs` → 눈으로 확인 → `npm run check`.
 - `mirrorX` 는 소스가 어느 쪽을 보는지에 따라 정한다. 판별법: walk 프레임을 `pet.png` 와 나란히 확대해 보고 **오른쪽을 보는 쪽**을 고른다.
+- **정면 포즈는 정지 화면으로 판정하지 말 것**(결정 25). 옆모습이 아니면 확대해도 방향이 안 보이는데, 비대칭도가 충분하면(pet6 측정 94.2) 걷는 모션에서는 좌우가 체감된다. 정면 캐릭터는 **크롬에서 실제로 걸려 보고** 정한다. 뒤집기는 플래그 한 줄이라 되돌리기 쉽다.
 - 아트 규칙: 가로 한 줄 9칸·균일·라벨 없음·진짜 알파 투명. 해상도는 높을수록 좋다(축소는 깨끗하지만 확대는 뭉개진다).
 - **캐릭터 추가법**: ① 고해상도 원본을 `assets/frames/` 에 넣고 make-sprite 의 `SHEETS` 에 한 줄 추가 → `node scripts/make-sprite.mjs` ② `src/core/characters.ts` 의 `CHARACTERS` 에 `{id,name,sprite}` 추가 ③ `manifest.json` 의 `web_accessible_resources` 에 파일명 추가. ②③ 중 하나라도 빠지면 `npm run validate` 가 잡는다. `build.mjs` 와 E2E 는 손댈 필요 없다(둘 다 목록에서 파생).
 - **캐릭터마다 그려진 크기는 달라도 된다** — 셀 규격(64×104)과 프레임 순서만 지키면 된다. 바닥 정렬(내용 최하단 y=103)은 make-sprite 가 자동으로 맞춘다.
