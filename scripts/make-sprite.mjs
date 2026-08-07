@@ -219,7 +219,7 @@ export async function makeSprite(srcPath, destPath, { mirrorX = MIRROR_X } = {})
 // mirrorX 는 소스 아트가 어느 쪽을 보는지에 따라 정한다(코드 기본은 오른쪽 보기).
 const SHEETS = [
   { src: 'assets/frames/sprite_images_v8.png', dest: 'src/assets/pet.png', mirrorX: true },
-  { src: 'assets/frames/pet2_source.png', dest: 'src/assets/pet2.png', mirrorX: false },
+  { src: 'assets/frames/pet2_source_v2.png', dest: 'src/assets/pet2.png', mirrorX: false },
 ];
 
 for (const sheet of SHEETS) {
